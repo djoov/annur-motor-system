@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
-import { useRouter, usePathname } from "next/navigation" // <-- Impor usePathname
+import { useRouter, usePathname } from "next/navigation"
 
 import { auth, db } from "@/lib/firebase" 
 import { 
@@ -11,7 +11,11 @@ import {
   signOut, 
   User as FirebaseUser,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  // Pastikan impor ini ada untuk fitur "Ingat Saya"
+  setPersistence,
+  browserSessionPersistence,
+  browserLocalPersistence
 } from "firebase/auth"
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 
@@ -23,10 +27,11 @@ interface User {
 }
 
 interface AuthContextType {
-  user: User | null
-  login: (email: string, password: string) => Promise<boolean>
+  // Pastikan tipe ini sesuai dengan fungsi login Anda
+  login: (email: string, password: string, rememberMe: boolean) => Promise<boolean>
   loginWithGoogle: () => Promise<boolean>
   logout: () => void
+  user: User | null
   isLoading: boolean
 }
 
@@ -36,7 +41,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
-  const pathname = usePathname() // <-- Dapatkan path halaman saat ini
+  const pathname = usePathname()
+
+  // --- [BARU] Daftar halaman yang bisa diakses publik ---
+  const publicPaths = ['/'];
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
@@ -58,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             name: firebaseUser.displayName || "Pengguna Baru",
             email: firebaseUser.email,
             role: "staff",
-            createdAt: serverTimestamp() // Gunakan serverTimestamp
+            createdAt: serverTimestamp()
           };
           await setDoc(userDocRef, newUserData);
           setUser({
@@ -77,26 +85,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe()
   }, [])
 
-  // --- [BARU] useEffect untuk menangani redirect secara terpusat ---
+  // --- [DIUBAH] useEffect untuk redirect sekarang mengenali halaman publik ---
   useEffect(() => {
-    // Jangan lakukan apa-apa jika masih loading
     if (isLoading) return;
 
-    // Jika user sudah login dan masih berada di halaman login, arahkan ke dashboard
+    const isPublicPath = publicPaths.includes(pathname);
+
+    // Jika user sudah login dan berada di halaman login, arahkan ke dashboard
     if (user && pathname === '/login') {
       router.push('/dashboard');
     }
 
-    // Jika user belum login dan mencoba mengakses halaman selain login, arahkan ke login
-    if (!user && pathname !== '/login') {
+    // Jika user BELUM login, BUKAN di halaman publik, dan BUKAN di halaman login,
+    // baru arahkan ke halaman login.
+    if (!user && !isPublicPath && pathname !== '/login') {
       router.push('/login');
     }
 
   }, [user, isLoading, pathname, router]);
 
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  // Fungsi login dengan parameter rememberMe
+  const login = async (email: string, password: string, rememberMe: boolean): Promise<boolean> => {
     try {
+      const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+      await setPersistence(auth, persistence);
       await signInWithEmailAndPassword(auth, email, password);
       return true
     } catch (error) {
@@ -107,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithGoogle = async (): Promise<boolean> => {
     try {
+      await setPersistence(auth, browserLocalPersistence);
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       return true;
@@ -118,11 +132,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     await signOut(auth)
-    // Redirect setelah logout akan ditangani oleh useEffect di atas
   }
 
-  // --- [DIUBAH] Kita tidak perlu lagi MainLayout dan page.tsx untuk redirect ---
-  // Kita hanya tampilkan children jika loading sudah selesai
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
