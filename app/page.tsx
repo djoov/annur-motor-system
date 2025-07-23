@@ -7,6 +7,7 @@ import { Wrench, Droplets, ShoppingCart, MapPin, Phone, Mail, ShieldCheck, Tag, 
 import Image from "next/image";
 import ImageCarousel from "@/components/layout/ImageCarousel"; // Pastikan Anda sudah membuat file ini
 import type { Metadata } from 'next'
+import LocationTracker from "@/components/layout/LocationTracker";
 
 export const metadata: Metadata = {
   title: 'Annur Motor - Toko Spare Part Motor Terpercaya di Magelang',
@@ -83,6 +84,7 @@ export default async function HomePage() {
     <div className="bg-gray-50 text-gray-800">
       <PublicNavbar />
       <WhatsAppButton />
+      <LocationTracker />
 
       <main>
         <section className="relative h-[80vh] flex items-center justify-center text-center text-white bg-gray-900 overflow-hidden">
