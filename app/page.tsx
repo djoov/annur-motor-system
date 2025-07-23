@@ -6,6 +6,25 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { Wrench, Droplets, ShoppingCart, MapPin, Phone, Mail, ShieldCheck, Tag, Clock } from "lucide-react";
 import Image from "next/image";
 import ImageCarousel from "@/components/layout/ImageCarousel"; // Pastikan Anda sudah membuat file ini
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Annur Motor - Toko Spare Part Motor Terpercaya di Magelang',
+  description: 'Annur Motor menyediakan layanan servis motor profesional, ganti oli, dan menjual spare part original dan aftermarket terlengkap di Secang, Magelang. Kunjungi kami untuk solusi lengkap motor Anda.',
+  keywords: ['bengkel motor magelang', 'toko spare part secang', 'servis motor', 'ganti oli', 'annur motor'],
+  openGraph: {
+      title: 'Annur Motor - Bengkel & Toko Spare Part Motor Terpercaya di Magelang',
+      description: 'Layanan servis profesional dan spare part terlengkap.',
+      images: [
+          {
+              url: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?q=80&w=1200&auto=format&fit=crop', // URL gambar utama untuk preview
+              width: 1200,
+              height: 630,
+              alt: 'Bengkel Motor Annur Motor',
+          },
+      ],
+  },
+}
 
 // --- Interface untuk data produk ---
 interface Item {
