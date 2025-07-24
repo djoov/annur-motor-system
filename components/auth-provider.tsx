@@ -114,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true
     } catch (error) {
       console.error("Login Gagal:", error);
+      toast.error("Login Gagal. Periksa email dan kata sandi Anda.");
       return false
     }
   }
@@ -126,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true;
     } catch (error) {
       console.error("Google Login Gagal:", error);
+      toast.error("Login dengan Google Gagal. Silakan coba lagi.");
       return false;
     }
   };
@@ -152,3 +154,6 @@ export function useAuth() {
   }
   return context
 }
+
+import { toast } from "sonner";
+
