@@ -5,7 +5,7 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { Wrench, Droplets, ShoppingCart, MapPin, Phone, Mail, ShieldCheck, Tag, Clock } from "lucide-react";
 import Image from "next/image";
-import ImageCarousel from "@/components/layout/ImageCarousel"; // Pastikan Anda sudah membuat file ini
+import ImageCarousel from "@/components/layout/ImageCarousel";
 import type { Metadata } from 'next'
 import LocationTracker from "@/components/layout/LocationTracker";
 
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
       description: 'Layanan servis profesional dan spare part terlengkap.',
       images: [
           {
-              url: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?q=80&w=1200&auto=format&fit=crop', // URL gambar utama untuk preview
+              url: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?q=80&w=1200&auto=format&fit=crop',
               width: 1200,
               height: 630,
               alt: 'Bengkel Motor Annur Motor',
@@ -27,10 +27,10 @@ export const metadata: Metadata = {
   },
 }
 
-// --- Interface untuk data produk ---
 interface Item {
   id: string;
   name: string;
+  description: string;
   sellPrice: number;
   imageUrl?: string;
 }
@@ -57,6 +57,14 @@ function getStockImageUrl(productName: string): string {
     if (name.includes('kampas')) return "https://images.unsplash.com/photo-1620892379929-4786d52a2f26?q=80&w=800";
     if (name.includes('busi')) return "https://images.unsplash.com/photo-1617153200151-a5836d502158?q=80&w=800";
     return `https://placehold.co/400x400/e2e8f0/64748b?text=${encodeURIComponent(productName)}`;
+}
+
+// Fungsi untuk memotong teks dengan aman
+function truncateText(text: string, maxLength: number = 100): string {
+  if (text.length <= maxLength) return text;
+  const truncated = text.substring(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(' ');
+  return truncated.substring(0, lastSpace > 0 ? lastSpace : maxLength) + '...';
 }
 
 // --- Fungsi Server-Side untuk mengambil produk secara acak ---
@@ -148,27 +156,51 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* Produk Unggulan Section */}
+        {/* --- SOLUSI SEDERHANA: Produk Unggulan dengan Tooltip/Hover --- */}
         <section id="produk" className="py-20 bg-white">
           <div className="container mx-auto px-4 text-center">
             <h2 className="text-3xl font-bold">Produk Unggulan</h2>
-            <p className="mt-2 text-gray-600">Beberapa produk terlaris yang tersedia di toko kami.</p>
+            <p className="mt-2 text-gray-600">Beberapa produk terlaris yang tersedia di toko kami. Hover pada produk untuk melihat deskripsi lengkap.</p>
             <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-6">
               {featuredProducts.map((product) => (
-                <Card key={product.id} className="overflow-hidden hover:shadow-xl transition-shadow duration-300">
-                  <div className="relative w-full h-40 bg-gray-200">
-                    <Image 
-                        src={product.imageUrl || getStockImageUrl(product.name)} 
-                        alt={product.name} 
-                        layout="fill" 
-                        objectFit="cover" 
-                    />
+                <div key={product.id} className="group relative">
+                  <Card className="flex flex-col text-center shadow-lg hover:shadow-2xl transition-all duration-300 rounded-lg overflow-hidden h-full">
+                    <div className="relative bg-gray-100 flex-grow flex items-center justify-center aspect-square overflow-hidden">
+                        <Image 
+                            src={product.imageUrl || getStockImageUrl(product.name)} 
+                            alt={product.name} 
+                            width={300}
+                            height={300}
+                            className="object-contain p-4 group-hover:scale-110 transition-transform duration-300"
+                        />
+                    </div>
+                    <CardContent className="p-4 bg-white flex-grow flex flex-col justify-between">
+                      <div>
+                        <h3 className="font-semibold truncate mb-2">{product.name}</h3>
+                        <p className="text-gray-500 text-sm leading-relaxed mb-3 min-h-[2.5rem]">
+                          {truncateText(product.description || "Deskripsi produk tidak tersedia.", 80)}
+                        </p>
+                      </div>
+                      
+                      <a 
+                        href={`https://wa.me/6288983773114?text=${encodeURIComponent(`Halo Annur Motor, saya tertarik dengan produk: ${product.name}. Bisakah saya mendapatkan informasi lebih lanjut?`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-auto inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-green-500 hover:bg-green-600 rounded-md transition-colors duration-200"
+                      >
+                        Tanya via WhatsApp
+                      </a>
+                    </CardContent>
+                  </Card>
+                  
+                  {/* Tooltip untuk deskripsi lengkap */}
+                  <div className="absolute top-0 left-0 right-0 bg-black bg-opacity-90 text-white p-4 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 max-h-40 overflow-y-auto">
+                    <h4 className="font-semibold mb-2">{product.name}</h4>
+                    <p className="text-sm leading-relaxed">
+                      {product.description || "Deskripsi produk tidak tersedia."}
+                    </p>
                   </div>
-                  <CardContent className="p-4">
-                    <h3 className="font-semibold truncate">{product.name}</h3>
-                    <p className="text-blue-600 font-bold">Rp {(product.sellPrice || 0).toLocaleString("id-ID")}</p>
-                  </CardContent>
-                </Card>
+                </div>
               ))}
             </div>
           </div>
