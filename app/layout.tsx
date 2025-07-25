@@ -10,16 +10,15 @@ export const metadata: Metadata = {
   title: "ANNUR MOTOR - Sistem Manajemen",
   description: "Sistem Annur Motor Pucang",
   generator: "v0.dev", 
+  verification: {
+    google: "BFUh7rV1V4UvzJwP2X1IEgMp7pgApnb-UnyuMyTAyZI", 
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="id" suppressHydrationWarning>
-      {/* tambahkan suppressHydrationWarning di sini. 
-        Ini aman dilakukan karena kita sudah mengelola tema di komponen klien.
-      */}
       <body className={inter.className}>
-        {/* --- [DIUBAH] Bungkus children dengan komponen Providers --- */}
         <Providers>{children}</Providers>
       </body>
     </html>
