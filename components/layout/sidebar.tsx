@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
-import { LayoutDashboard, Package, Users, Truck, FileText, Settings, LogOut, Menu, X, Bike, Wrench, ShoppingCart, BarChart3, Database, Upload, MapPin } from "lucide-react";
+import { LayoutDashboard, Package, Users, Truck, FileText, Settings, LogOut, Menu, X, Bike, Wrench, ShoppingCart, BarChart3, Database, Upload, MapPin, Archive,} from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -20,6 +20,7 @@ const navigation = [
       { name: "Pelanggan", href: "/master/customers", icon: Users },
       { name: "Supplier", href: "/master/suppliers", icon: Truck },
       { name: "Stok Barang", href: "/master/stock", icon: Package },
+      { name: "Pencatatan Pembelian", href: "/master/purchases", icon: Archive },
       { name: "Import CSV", href: "/master/import", icon: Upload },
     ],
   },
