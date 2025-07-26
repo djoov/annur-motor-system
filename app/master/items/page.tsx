@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Edit, Trash2, Search, Package, UploadCloud, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { db } from "@/lib/firebase" // Kita tidak butuh 'storage' lagi
+import { db } from "@/lib/firebase"
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore"
 
 interface Item {
@@ -33,46 +33,56 @@ interface Item {
   sellPrice: number
   stock: number
   minStock: number
-  imageUrl?: string // Ini akan menyimpan Base64 string
+  imageUrl?: string
   barcode?: string
   createdAt: any
 }
 
-const categories = ["Spare Part Motor", "Oli & Pelumas", "Ban & Velg", "Aksesoris", "Service"]
+interface Category {
+    id: string;
+    name: string;
+}
 
 export default function ItemsPage() {
   const [items, setItems] = useState<Item[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<Item | null>(null)
-  
   const [formData, setFormData] = useState({ code: "", name: "", description: "", category: "", buyPrice: "", sellPrice: "", stock: "", minStock: "", barcode: "" })
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [imageBase64, setImageBase64] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
-  
-  const itemsCollectionRef = collection(db, "items");
 
-  const fetchItems = async () => {
-    setIsLoading(true);
+  const itemsCollectionRef = collection(db, "items")
+  const fetchItems = async () => fetchData()
+
+  const fetchData = async () => {
+    setIsLoading(true)
     try {
-        const data = await getDocs(itemsCollectionRef);
-        const fetchedItems = data.docs.map((doc) => ({ ...doc.data(), id: doc.id } as Item));
-        setItems(fetchedItems);
-    } catch (error) {
-        console.error("Gagal mengambil data barang:", error);
-        toast({ title: "Gagal Memuat Data", variant: "destructive" });
+        const itemsSnapshot = await getDocs(collection(db, "items"))
+        const categoriesSnapshot = await getDocs(collection(db, "categories"))
+
+        const fetchedItems = itemsSnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id } as Item))
+        const fetchedCategories = categoriesSnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id } as Category))
+
+        setItems(fetchedItems)
+        setCategories(fetchedCategories)
+    } catch (error: any) {
+        console.error("Gagal mengambil data:", error)
+        toast({ title: "Gagal Memuat Data", description: error.message, variant: "destructive" })
     } finally {
-        setIsLoading(false);
+        setIsLoading(false)
     }
   }
   
   useEffect(() => {
-    fetchItems();
-  }, []);
+    fetchData()
+  }, [])
 
   const filteredItems = items.filter(
     (item) =>
@@ -82,89 +92,88 @@ export default function ItemsPage() {
   )
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
+      const file = e.target.files?.[0]
       if (file) {
           if (!file.type.startsWith("image/")) {
-              toast({ title: "File harus berupa gambar", variant: "destructive" });
-              return;
+              toast({ title: "File harus berupa gambar", variant: "destructive" })
+              return
           }
-          if (file.size > 500 * 1024) { // Batasi ukuran 500KB
-              toast({ title: "Ukuran file terlalu besar", description: "Maksimal 500KB untuk metode ini.", variant: "destructive" });
-              return;
+          if (file.size > 500 * 1024) {
+              toast({ title: "Ukuran file terlalu besar", description: "Maksimal 500KB untuk metode ini.", variant: "destructive" })
+              return
           }
-          const reader = new FileReader();
+          const reader = new FileReader()
           reader.onloadend = () => {
-              setImageBase64(reader.result as string);
-          };
-          reader.readAsDataURL(file);
+              setImageBase64(reader.result as string)
+          }
+          reader.readAsDataURL(file)
       }
   }
 
   const resetForm = () => {
-    setFormData({ code: "", name: "", description: "", category: "", buyPrice: "", sellPrice: "", stock: "", minStock: "", barcode: "" });
-    setImageBase64(null);
-    setEditingItem(null);
+    setFormData({ code: "", name: "", description: "", category: "", buyPrice: "", sellPrice: "", stock: "", minStock: "", barcode: "" })
+    setImageBase64(null)
+    setEditingItem(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSaving) return;
-    setIsSaving(true);
+    e.preventDefault()
+    if (isSaving) return
+    setIsSaving(true)
 
     try {
-        const imageUrl = imageBase64 || editingItem?.imageUrl || "";
-        
+        const imageUrl = imageBase64 || editingItem?.imageUrl || ''
         const itemData = {
           code: formData.code, name: formData.name, description: formData.description, category: formData.category,
           buyPrice: Number(formData.buyPrice), sellPrice: Number(formData.sellPrice), stock: Number(formData.stock),
           minStock: Number(formData.minStock), barcode: formData.barcode, imageUrl,
-        };
+        }
 
         if (editingItem) {
-          const itemDoc = doc(db, "items", editingItem.id);
-          await updateDoc(itemDoc, itemData);
-          toast({ title: "Barang berhasil diperbarui" });
+          const itemDoc = doc(db, "items", editingItem.id)
+          await updateDoc(itemDoc, itemData)
+          toast({ title: "Barang berhasil diperbarui" })
         } else {
-          await addDoc(itemsCollectionRef, { ...itemData, createdAt: serverTimestamp() });
-          toast({ title: "Barang berhasil ditambahkan" });
+          await addDoc(itemsCollectionRef, { ...itemData, createdAt: serverTimestamp() })
+          toast({ title: "Barang berhasil ditambahkan" })
         }
         
-        await fetchItems();
-        setIsDialogOpen(false);
-        resetForm();
+        await fetchItems()
+        setIsDialogOpen(false)
+        resetForm()
 
     } catch (error: any) {
-        console.error("Gagal menyimpan barang:", error);
-        toast({ title: "Gagal Menyimpan", description: `Terjadi kesalahan: ${error.message}`, variant: "destructive" });
+        console.error("Gagal menyimpan barang:", error)
+        toast({ title: "Gagal Menyimpan", description: `Terjadi kesalahan: ${error.message}`, variant: "destructive" })
     } finally {
-        setIsSaving(false);
+        setIsSaving(false)
     }
   }
 
   const handleEdit = (item: Item) => {
-    setEditingItem(item);
+    setEditingItem(item)
     setFormData({
-      code: item.code || "", name: item.name || "", description: item.description || "", category: item.category || "",
+      code: item.code || '', name: item.name || '', description: item.description || '', category: item.category || '',
       buyPrice: (item.buyPrice || 0).toString(), sellPrice: (item.sellPrice || 0).toString(),
-      stock: (item.stock || 0).toString(), minStock: (item.minStock || 0).toString(), barcode: item.barcode || "",
-    });
-    setImageBase64(item.imageUrl || null);
-    setIsDialogOpen(true);
+      stock: (item.stock || 0).toString(), minStock: (item.minStock || 0).toString(), barcode: item.barcode || '',
+    })
+    setImageBase64(item.imageUrl || null)
+    setIsDialogOpen(true)
   }
 
   const handleDelete = async (id: string) => {
-     if (!confirm("Apakah Anda yakin ingin menghapus barang ini?")) return;
-    await deleteDoc(doc(db, "items", id));
-    toast({ title: "Barang berhasil dihapus" });
-    await fetchItems();
+     if (!confirm("Apakah Anda yakin ingin menghapus barang ini?")) return
+    await deleteDoc(doc(db, "items", id))
+    toast({ title: "Barang berhasil dihapus" })
+    await fetchItems()
   }
   
   const handleDialogChange = (open: boolean) => {
       if (!open) {
-          resetForm();
-          setIsSaving(false);
+          resetForm()
+          setIsSaving(false)
       }
-      setIsDialogOpen(open);
+      setIsDialogOpen(open)
   }
 
   return (
@@ -222,8 +231,10 @@ export default function ItemsPage() {
                     <div>
                         <Label htmlFor="category">Kategori</Label>
                         <Select value={formData.category} onValueChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}>
-                        <SelectTrigger><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
-                        <SelectContent>{categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                          <SelectTrigger><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
+                          <SelectContent>
+                            {categories.map((c) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                          </SelectContent>
                         </Select>
                     </div>
                     <div className="col-span-2">
