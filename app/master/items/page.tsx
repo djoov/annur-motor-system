@@ -91,6 +91,19 @@ export default function ItemsPage() {
       (item.category || '').toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
+  const sortedItems = [...filteredItems].sort((a, b) => {
+  const aHasCat = a.category ? 1 : 0
+  const bHasCat = b.category ? 1 : 0
+  // 1) Barang dengan kategori (1) datang sebelum tanpa kategori (0)
+  if (aHasCat !== bHasCat) return bHasCat - aHasCat
+  // 2) Urutkan menurut nama kategori
+  if (a.category !== b.category) {
+    return a.category.localeCompare(b.category)
+  }
+  // 3) Kalau sama kategori, urutkan menurut nama barang
+  return a.name.localeCompare(b.name)
+})
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
       if (file) {
@@ -297,7 +310,7 @@ export default function ItemsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoading ? (<tr><td colSpan={6} className="text-center p-4">Memuat...</td></tr>) : filteredItems.map((item) => (
+                  {isLoading ? (<tr><td colSpan={6} className="text-center p-4">Memuat...</td></tr>) : sortedItems.map((item) => (
                     <tr key={item.id} className="border-b hover:bg-gray-50">
                       <td className="py-2 px-2">
                         <div className="h-12 w-12 relative bg-gray-100 rounded-md flex items-center justify-center">
