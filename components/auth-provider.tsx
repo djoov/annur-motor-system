@@ -3,6 +3,7 @@
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
+import { useToast } from "@/hooks/use-toast" // <-- Gunakan useToast yang sudah ada
 
 import { auth, db } from "@/lib/firebase" 
 import { 
@@ -12,7 +13,6 @@ import {
   User as FirebaseUser,
   GoogleAuthProvider,
   signInWithPopup,
-  // Pastikan impor ini ada untuk fitur "Ingat Saya"
   setPersistence,
   browserSessionPersistence,
   browserLocalPersistence
@@ -27,7 +27,6 @@ interface User {
 }
 
 interface AuthContextType {
-  // Pastikan tipe ini sesuai dengan fungsi login Anda
   login: (email: string, password: string, rememberMe: boolean) => Promise<boolean>
   loginWithGoogle: () => Promise<boolean>
   logout: () => void
@@ -42,8 +41,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
+  const { toast } = useToast() // <-- Panggil hook di sini
 
-  // --- [BARU] Daftar halaman yang bisa diakses publik ---
   const publicPaths = ['/'];
 
   useEffect(() => {
@@ -61,7 +60,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             role: userData.role || "staff"
           });
         } else {
-          console.log("User baru terdeteksi, membuat dokumen di Firestore...");
           const newUserData = {
             name: firebaseUser.displayName || "Pengguna Baru",
             email: firebaseUser.email,
@@ -85,27 +83,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe()
   }, [])
 
-  // --- [DIUBAH] useEffect untuk redirect sekarang mengenali halaman publik ---
   useEffect(() => {
     if (isLoading) return;
-
     const isPublicPath = publicPaths.includes(pathname);
-
-    // Jika user sudah login dan berada di halaman login, arahkan ke dashboard
     if (user && pathname === '/login') {
       router.push('/dashboard');
     }
-
-    // Jika user BELUM login, BUKAN di halaman publik, dan BUKAN di halaman login,
-    // baru arahkan ke halaman login.
     if (!user && !isPublicPath && pathname !== '/login') {
       router.push('/login');
     }
-
   }, [user, isLoading, pathname, router]);
 
-
-  // Fungsi login dengan parameter rememberMe
   const login = async (email: string, password: string, rememberMe: boolean): Promise<boolean> => {
     try {
       const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
@@ -114,7 +102,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true
     } catch (error) {
       console.error("Login Gagal:", error);
-      toast.error("Login Gagal. Periksa email dan kata sandi Anda.");
+      // --- [DIPERBAIKI] Gunakan toast yang benar ---
+      toast({ 
+          title: "Login Gagal", 
+          description: "Periksa email dan kata sandi Anda.", 
+          variant: "destructive" 
+      });
       return false
     }
   }
@@ -127,7 +120,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true;
     } catch (error) {
       console.error("Google Login Gagal:", error);
-      toast.error("Login dengan Google Gagal. Silakan coba lagi.");
+      toast({ 
+          title: "Login dengan Google Gagal", 
+          description: "Silakan coba lagi.", 
+          variant: "destructive" 
+      });
       return false;
     }
   };
@@ -154,6 +151,3 @@ export function useAuth() {
   }
   return context
 }
-
-import { toast } from "sonner";
-
