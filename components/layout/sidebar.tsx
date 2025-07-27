@@ -6,10 +6,15 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
-import { LayoutDashboard, Package, Users, Truck, FileText, Settings, LogOut, Menu, X, Bike, Wrench, ShoppingCart, BarChart3, Database, Upload, MapPin, Archive,} from "lucide-react";
+import { 
+    LayoutDashboard, Package, Users, Truck, FileText, Settings, 
+    LogOut, Menu, X, Bike, Wrench, ShoppingCart, BarChart3, 
+    Database, Upload, MapPin, Archive, ScanLine, History // <-- [DIPERBAIKI] Menambahkan 'History'
+} from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Scan QR", href: "/scan", icon: ScanLine },
   { name: "Kasir (POS)", href: "/pos", icon: ShoppingCart },
   {
     name: "Master Data",
@@ -34,6 +39,7 @@ const navigation = [
       { name: "Transaksi", href: "/reports/transactions", icon: FileText },
       { name: "Keuntungan", href: "/reports/profit", icon: FileText },
       { name: "Peta Pengunjung", href: "/reports/visitor-map", icon: MapPin },
+      { name: "Riwayat Pergerakan", href: "/reports/movement-history", icon: History },
     ],
   },
   { name: "Pengaturan", href: "/settings", icon: Settings },
@@ -54,11 +60,14 @@ export function Sidebar() {
     const isExpanded = expandedItems.includes(item.name);
     const hasChildren = item.children && item.children.length > 0;
 
+    const Icon = item.icon; // Variabel dengan huruf kapital
+
     return (
       <div>
         {hasChildren ? (
           <button onClick={() => toggleExpanded(item.name)} className={cn("w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors", "hover:bg-blue-50 hover:text-blue-600", level > 0 && "ml-4")}>
-            <item.icon className="mr-3 h-4 w-4" />
+            {/* --- [DIPERBAIKI] Menggunakan 'Icon' --- */}
+            <Icon className="mr-3 h-4 w-4" />
             {item.name}
             <span className="ml-auto">{isExpanded ? "−" : "+"}</span>
           </button>
@@ -68,7 +77,7 @@ export function Sidebar() {
             className={cn("flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors", isActive ? "bg-blue-100 text-blue-600" : "text-gray-600 hover:bg-blue-50 hover:text-blue-600", level > 0 && "ml-4")}
             onClick={() => setIsOpen(false)}
           >
-            <item.icon className="mr-3 h-4 w-4" />
+            <Icon className="mr-3 h-4 w-4" />
             {item.name}
           </Link>
         )}
