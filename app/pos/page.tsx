@@ -5,7 +5,6 @@ import { MainLayout } from "@/components/layout/main-layout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
-// --- [DIPERBAIKI] Tambahkan 'Label' di sini ---
 import { Label } from "@/components/ui/label"
 import {
   Dialog,
@@ -15,6 +14,7 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, X, Plus, Minus, User, ShoppingCart, DollarSign } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { db } from "@/lib/firebase"
@@ -51,7 +51,7 @@ export default function PosPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
-  const [selectedCustomer, setSelectedCustomer] = useState<string>("Pelanggan Umum")
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("umum")
 
   useEffect(() => {
     const fetchData = async () => {
@@ -73,7 +73,7 @@ export default function PosPage() {
       setIsLoading(false)
     }
     fetchData()
-  }, [toast])
+  }, []) // <-- [DIPERBAIKI] Menghapus dependensi 'toast' yang tidak perlu
 
   useEffect(() => {
     if (searchTerm === "") {
@@ -145,9 +145,15 @@ export default function PosPage() {
     try {
         const batch = writeBatch(db);
         const transactionRef = doc(collection(db, "transactions"));
+        
+        const customer = customers.find(c => c.id === selectedCustomerId);
+        const customerIdToSave = customer ? customer.id : "umum";
+        const customerNameToSave = customer ? customer.name : "Pelanggan Umum";
+
         batch.set(transactionRef, {
             transactionDate: serverTimestamp(),
-            customerName: selectedCustomer,
+            customerId: customerIdToSave,
+            customerName: customerNameToSave,
             totalAmount: cartSummary.totalAmount,
             totalProfit: cartSummary.totalProfit,
             items: cart.map(item => ({
@@ -193,7 +199,6 @@ export default function PosPage() {
   return (
     <MainLayout>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-80px)]">
-        {/* Kolom Kiri: Daftar Barang */}
         <div className="lg:col-span-2 flex flex-col h-full">
           <Card className="flex-grow flex flex-col">
             <CardHeader>
@@ -234,7 +239,6 @@ export default function PosPage() {
           </Card>
         </div>
 
-        {/* Kolom Kanan: Keranjang Belanja */}
         <div className="flex flex-col h-full">
           <Card className="flex-grow flex flex-col">
             <CardHeader>
@@ -288,10 +292,18 @@ export default function PosPage() {
                     <div className="py-4 space-y-4">
                         <div>
                             <Label htmlFor="customer">Pelanggan</Label>
-                            <select id="customer" value={selectedCustomer} onChange={(e) => setSelectedCustomer(e.target.value)} className="w-full p-2 border rounded-md">
-                                <option>Pelanggan Umum</option>
-                                {customers.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                            </select>
+                            {/* --- [DIPERBAIKI] Mengganti <select> dengan komponen Select --- */}
+                            <Select value={selectedCustomerId} onValueChange={(value) => setSelectedCustomerId(value)}>
+                                <SelectTrigger id="customer">
+                                    <SelectValue placeholder="Pilih pelanggan..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="umum">Pelanggan Umum</SelectItem>
+                                    {customers.map(c => (
+                                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="text-center space-y-2">
                             <p className="text-muted-foreground">Total Tagihan</p>

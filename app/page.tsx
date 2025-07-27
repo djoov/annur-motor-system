@@ -2,7 +2,7 @@ import { PublicNavbar } from "@/components/layout/public-navbar";
 import { Button } from "@/components/ui/button";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { Wrench, Droplets, ShoppingCart, MapPin, Phone, Mail, ShieldCheck, Tag, Clock } from "lucide-react";
+import { Wrench, Droplets, ShoppingCart, MapPin, Mail, ShieldCheck, Tag, Clock } from "lucide-react";
 import Image from "next/image";
 import ImageCarousel from "@/components/layout/ImageCarousel";
 import type { Metadata } from 'next'
@@ -47,7 +47,6 @@ const WhatsAppButton = () => (
     </a>
 );
 
-// --- [DIPERBAIKI] Fungsi getFeaturedProducts sekarang mengubah Timestamp menjadi string ---
 async function getFeaturedProducts(): Promise<Item[]> {
   try {
     const itemsRef = collection(db, "items");
@@ -56,10 +55,6 @@ async function getFeaturedProducts(): Promise<Item[]> {
 
     const allProducts = querySnapshot.docs.map((doc) => {
         const data = doc.data();
-        // Hapus atau konversi field yang tidak bisa dikirim ke komponen klien
-        // Dalam kasus ini, kita tidak mengirim `createdAt`, jadi tidak perlu konversi.
-        // Jika Anda memerlukannya di masa depan, gunakan:
-        // const simpleCreatedAt = data.createdAt.toDate().toISOString();
         return { 
             id: doc.id,
             name: data.name,
@@ -103,7 +98,6 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* "Mengapa Memilih Kami?" Section */}
         <section id="keunggulan" className="py-20 bg-white">
             <div className="container mx-auto px-4 text-center">
                 <h2 className="text-3xl font-bold">Mengapa Memilih Annur Motor?</h2>
@@ -127,32 +121,18 @@ export default async function HomePage() {
             </div>
         </section>
 
-        {/* Layanan Section */}
         <section id="layanan" className="py-20 bg-gray-50">
           <div className="container mx-auto px-4 text-center">
             <h2 className="text-3xl font-bold">Layanan Kami</h2>
             <p className="mt-2 text-gray-600">Kami menyediakan sparepart terbaik untuk menjaga performa motor Anda.</p>
             <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="p-6">
-                <Wrench className="h-12 w-12 mx-auto text-blue-600" />
-                <h3 className="mt-4 text-xl font-semibold">Servis Profesional - Soon!</h3>
-                <p className="mt-2 text-gray-600">Ditangani oleh mekanik berpengalaman untuk servis ringan hingga turun mesin.</p>
-              </div>
-              <div className="p-6">
-                <Droplets className="h-12 w-12 mx-auto text-blue-600" />
-                <h3 className="mt-4 text-xl font-semibold">Ganti Oli & Cairan</h3>
-                <p className="mt-2 text-gray-600">Pilihan oli dan pelumas berkualitas untuk menjaga keawetan mesin motor Anda.</p>
-              </div>
-              <div className="p-6">
-                <ShoppingCart className="h-12 w-12 mx-auto text-blue-600" />
-                <h3 className="mt-4 text-xl font-semibold">Spare Part Lengkap</h3>
-                <p className="mt-2 text-gray-600">Menyediakan suku cadang original dan aftermarket terpercaya.</p>
-              </div>
+              <div className="p-6"><Wrench className="h-12 w-12 mx-auto text-blue-600" /><h3 className="mt-4 text-xl font-semibold">Servis Profesional - Soon!</h3><p className="mt-2 text-gray-600">Ditangani oleh mekanik berpengalaman untuk servis ringan hingga turun mesin.</p></div>
+              <div className="p-6"><Droplets className="h-12 w-12 mx-auto text-blue-600" /><h3 className="mt-4 text-xl font-semibold">Ganti Oli & Cairan</h3><p className="mt-2 text-gray-600">Pilihan oli dan pelumas berkualitas untuk menjaga keawetan mesin motor Anda.</p></div>
+              <div className="p-6"><ShoppingCart className="h-12 w-12 mx-auto text-blue-600" /><h3 className="mt-4 text-xl font-semibold">Spare Part Lengkap</h3><p className="mt-2 text-gray-600">Menyediakan suku cadang original dan aftermarket terpercaya.</p></div>
             </div>
           </div>
         </section>
         
-        {/* Produk Unggulan Section */}
         <section id="produk" className="py-20 bg-white">
           <div className="container mx-auto px-4 text-center">
             <h2 className="text-3xl font-bold">Produk Unggulan</h2>
@@ -161,18 +141,15 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* Lokasi Section */}
         <section id="lokasi" className="py-20 bg-gray-50">
           <div className="container mx-auto px-4">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold">Temukan Kami</h2>
-              <p className="mt-2 text-gray-600">Kunjungi Toko kami atau hubungi kami untuk informasi lebih lanjut.</p>
-            </div>
+            <div className="text-center"><h2 className="text-3xl font-bold">Temukan Kami</h2><p className="mt-2 text-gray-600">Kunjungi Toko kami atau hubungi kami untuk informasi lebih lanjut.</p></div>
             <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
               <div>
                 <div className="aspect-w-16 aspect-h-9 rounded-lg overflow-hidden shadow-lg">
+                  {/* --- [DIPERBAIKI] Mengganti URL iframe dengan yang valid --- */}
                   <iframe
-                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2157.251982231738!2d110.2545485834527!3d-7.4189610409443345!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2e7a8693aee2065f%3A0xfb90c5a96cf4c97a!2sToko%20Sparepart%20-%20Annur%20Motor!5e0!3m2!1sen!2sid!4v1753231579874!5m2!1sen!2sid"
+                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3955.51739055933!2d110.2520110747618!3d-7.518600892487531!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2e7a8693aee2065f%3A0xfb90c5a96cf4c97a!2sToko%20Sparepart%20-%20Annur%20Motor!5e0!3m2!1sen!2sid!4v1722072919374!5m2!1sen!2sid"
                     width="100%"
                     height="450"
                     style={{ border: 0 }}
@@ -183,30 +160,9 @@ export default async function HomePage() {
                 </div>
               </div>
               <div className="space-y-6">
-                <div className="flex items-start gap-4">
-                  <MapPin className="h-6 w-6 text-blue-600 mt-1" />
-                  <div>
-                    <h3 className="font-semibold">Alamat</h3>
-                    <p>Jl. Raya Pucang No. 12, Karang Wetan, Pucang, Secang, Kabupaten Magelang, Jawa Tengah</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <Mail className="h-6 w-6 text-blue-600 mt-1" />
-                  <div>
-                    <h3 className="font-semibold">Alamat Email</h3>
-                    <a href="mailto:annurmotorpucang@gmail.com" className="text-blue-600 hover:underline">
-                      annurmotorpucang@gmail.com
-                    </a>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <Wrench className="h-6 w-6 text-blue-600 mt-1" />
-                  <div>
-                    <h3 className="font-semibold">Jam Buka</h3>
-                    <p>Senin - Sabtu: 07:30 - 17:00</p>
-                    <p>Minggu: 08:00 - 17:00</p>
-                  </div>
-                </div>
+                <div className="flex items-start gap-4"><MapPin className="h-6 w-6 text-blue-600 mt-1" /><div><h3 className="font-semibold">Alamat</h3><p>Jl. Raya Pucang No. 12, Karang Wetan, Pucang, Secang, Kabupaten Magelang, Jawa Tengah</p></div></div>
+                <div className="flex items-start gap-4"><Mail className="h-6 w-6 text-blue-600 mt-1" /><div><h3 className="font-semibold">Alamat Email</h3><a href="mailto:annurmotorpucang@gmail.com" className="text-blue-600 hover:underline">annurmotorpucang@gmail.com</a></div></div>
+                <div className="flex items-start gap-4"><Wrench className="h-6 w-6 text-blue-600 mt-1" /><div><h3 className="font-semibold">Jam Buka</h3><p>Senin - Sabtu: 07:30 - 17:00</p><p>Minggu: 08:00 - 17:00</p></div></div>
               </div>
             </div>
           </div>
