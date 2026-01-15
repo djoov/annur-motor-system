@@ -1,0 +1,81 @@
+import 'package:flutter/material.dart';
+import 'desktop_sidebar.dart';
+import 'app_drawer.dart'; // Import AppDrawer for mobile
+import 'dart:io'; // For Platform check
+import 'package:flutter/foundation.dart'; // For kIsWeb
+
+class DesktopScaffold extends StatelessWidget {
+  final Widget body;
+  final String activeRoute;
+  final String? title; // Optional title for desktop header if needed
+  final bool isScanner; // To handle scanner specific logic if needed
+  final Widget? floatingActionButton;
+
+  const DesktopScaffold({
+    super.key,
+    required this.body,
+    required this.activeRoute,
+    this.title,
+    this.isScanner = false,
+    this.floatingActionButton,
+  });
+
+  static bool get isDesktop {
+    if (kIsWeb) return false; // Or check width
+    return Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isDesktop) {
+      // On Mobile: Return a standard Scaffold with AppBar & Drawer
+      // This ensures Material widgets are present and structure is correct.
+      return Scaffold(
+        appBar: title != null
+            ? AppBar(
+                title: Text(title!),
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                elevation: 0,
+              )
+            : null,
+        drawer: const AppDrawer(),
+        body: body,
+        floatingActionButton: floatingActionButton,
+      );
+    }
+
+    // On Desktop: Return the responsive Sidebar layout
+    return Scaffold(
+      backgroundColor: const Color(0xFFF1F5F9), // AppColors.background
+      floatingActionButton: floatingActionButton,
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DesktopSidebar(activeRoute: activeRoute),
+          Expanded(
+            child: Column(
+              children: [
+                if (title != null)
+                  Container(
+                    height: 60,
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    color: Colors.white,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      title!,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                Expanded(child: body),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

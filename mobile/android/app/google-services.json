@@ -1,0 +1,126 @@
+{
+  "project_info": {
+    "project_number": "770182713014",
+    "project_id": "annur-motor-system",
+    "storage_bucket": "annur-motor-system.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:770182713014:android:716c82c06a095c72c02017",
+        "android_client_info": {
+          "package_name": "com.annurmotor.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "770182713014-ge34p2qknlaudbfgsov4ot2alp3el9vo.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.annurmotor.app",
+            "certificate_hash": "7bcd054d722791d61a5f903aec20bb37b390ead9"
+          }
+        },
+        {
+          "client_id": "770182713014-nr7acgdqo5l1sbbc4c1ccef1l05l2dcj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjOeSZ6JUCnYmIzsKbL7LznTz77ifJneE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "770182713014-nr7acgdqo5l1sbbc4c1ccef1l05l2dcj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "770182713014-m8jlet7a2fekso785esrk71cmlngqind.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.annurMotorMobile"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:770182713014:android:95c096446730f14dc02017",
+        "android_client_info": {
+          "package_name": "com.example.annur_mobile_motor"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "770182713014-nr7acgdqo5l1sbbc4c1ccef1l05l2dcj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjOeSZ6JUCnYmIzsKbL7LznTz77ifJneE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "770182713014-nr7acgdqo5l1sbbc4c1ccef1l05l2dcj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "770182713014-m8jlet7a2fekso785esrk71cmlngqind.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.annurMotorMobile"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:770182713014:android:a0a29ba2d47581fcc02017",
+        "android_client_info": {
+          "package_name": "com.example.annur_motor_mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "770182713014-nr7acgdqo5l1sbbc4c1ccef1l05l2dcj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjOeSZ6JUCnYmIzsKbL7LznTz77ifJneE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "770182713014-nr7acgdqo5l1sbbc4c1ccef1l05l2dcj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "770182713014-m8jlet7a2fekso785esrk71cmlngqind.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.annurMotorMobile"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,8 +1,0 @@
-# Konfigurasi Build untuk Netlify
-[build]
-  command = "next build"
-  publish = ".next"
-
-# Plugin esensial untuk Next.js di Netlify
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
