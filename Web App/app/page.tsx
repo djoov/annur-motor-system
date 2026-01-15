@@ -138,7 +138,7 @@ export default async function HomePage() {
 
             <div className="flex flex-col sm:flex-row gap-5 justify-center items-center animate-fade-in-up opacity-0" style={{ animationDelay: '0.7s', animationFillMode: 'forwards' }}>
               <Button asChild size="lg" className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white px-10 py-7 text-lg shadow-xl hover:shadow-orange-500/30 transition-all rounded-full group relative overflow-hidden">
-                <a href="#produk">
+                <a href="/katalog">
                   <span className="relative z-10 flex items-center">
                     Cari Sparepart
                     <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
