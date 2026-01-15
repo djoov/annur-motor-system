@@ -5,11 +5,11 @@ import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useToast } from "@/hooks/use-toast" // <-- Gunakan useToast yang sudah ada
 
-import { auth, db } from "@/lib/firebase" 
-import { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  signOut, 
+import { auth, db } from "@/lib/firebase"
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
   User as FirebaseUser,
   GoogleAuthProvider,
   signInWithPopup,
@@ -43,14 +43,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { toast } = useToast() // <-- Panggil hook di sini
 
-  const publicPaths = ['/'];
+  const publicPaths = ['/', '/katalog'];
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         const userDocRef = doc(db, "users", firebaseUser.uid);
         const userDoc = await getDoc(userDocRef);
-        
+
         if (userDoc.exists()) {
           const userData = userDoc.data();
           setUser({
@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setIsLoading(false)
     })
-    
+
     return () => unsubscribe()
   }, [])
 
@@ -103,10 +103,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Login Gagal:", error);
       // --- [DIPERBAIKI] Gunakan toast yang benar ---
-      toast({ 
-          title: "Login Gagal", 
-          description: "Periksa email dan kata sandi Anda.", 
-          variant: "destructive" 
+      toast({
+        title: "Login Gagal",
+        description: "Periksa email dan kata sandi Anda.",
+        variant: "destructive"
       });
       return false
     }
@@ -120,10 +120,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true;
     } catch (error) {
       console.error("Google Login Gagal:", error);
-      toast({ 
-          title: "Login dengan Google Gagal", 
-          description: "Silakan coba lagi.", 
-          variant: "destructive" 
+      toast({
+        title: "Login dengan Google Gagal",
+        description: "Silakan coba lagi.",
+        variant: "destructive"
       });
       return false;
     }
