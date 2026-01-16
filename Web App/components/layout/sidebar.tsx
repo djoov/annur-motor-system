@@ -54,6 +54,7 @@ const navigation = [
           { name: "Top Selling", href: "/reports/top-selling", icon: BarChart3 },
           { name: "Riwayat Transaksi", href: "/reports/transactions", icon: History },
           { name: "Profit / Rugi", href: "/reports/profit", icon: FileText },
+          { name: "Piutang / Hutang", href: "/reports/debts", icon: FileText },
           { name: "Peta Pengunjung", href: "/reports/visitor-map", icon: MapPin },
           { name: "Arus Stok", href: "/reports/movement-history", icon: Archive },
         ],

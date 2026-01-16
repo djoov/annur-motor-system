@@ -175,25 +175,25 @@ export default function SuppliersPage() {
                 <form onSubmit={handleSubmit} className="space-y-4 py-4">
                   <div className="grid gap-2">
                     <Label htmlFor="name">Nama Perusahaan / Toko</Label>
-                    <Input id="name" value={formData.name} onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))} placeholder="PT. Maju Mundur" required />
+                    <Input id="name" value={formData.name} onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))} placeholder="PT. Maju Mundur" required maxLength={100} />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="contact">Nama Sales / PIC</Label>
-                      <Input id="contact" value={formData.contact} onChange={(e) => setFormData(p => ({ ...p, contact: e.target.value }))} placeholder="Bpk. Budi" required />
+                      <Input id="contact" value={formData.contact} onChange={(e) => setFormData(p => ({ ...p, contact: e.target.value }))} placeholder="Bpk. Budi" required maxLength={100} />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="phone">No. HP / Telp</Label>
-                      <Input id="phone" value={formData.phone} onChange={(e) => setFormData(p => ({ ...p, phone: e.target.value }))} placeholder="08..." required />
+                      <Input id="phone" type="tel" value={formData.phone} onChange={(e) => setFormData(p => ({ ...p, phone: e.target.value.replace(/[^0-9+\-\s]/g, '') }))} placeholder="08xxx" required maxLength={20} />
                     </div>
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="email">Email (Opsional)</Label>
-                    <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData(p => ({ ...p, email: e.target.value }))} />
+                    <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData(p => ({ ...p, email: e.target.value }))} maxLength={100} placeholder="email@contoh.com" />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="address">Alamat Kantor / Gudang</Label>
-                    <Textarea id="address" value={formData.address} onChange={(e) => setFormData(p => ({ ...p, address: e.target.value }))} rows={2} />
+                    <Textarea id="address" value={formData.address} onChange={(e) => setFormData(p => ({ ...p, address: e.target.value }))} rows={2} maxLength={500} placeholder="Maks. 500 karakter" />
                   </div>
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Batal</Button>

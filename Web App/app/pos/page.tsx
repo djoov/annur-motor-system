@@ -18,7 +18,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, ShoppingCart, DollarSign, CreditCard, Printer, Trash2 } from "lucide-react"
+import { Search, ShoppingCart, DollarSign, CreditCard, Printer, Trash2, Clock } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { db } from "@/lib/firebase"
 import { usePos } from "@/hooks/use-pos"
@@ -41,7 +41,7 @@ export default function PosPage() {
   // Checkout State
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("umum")
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer'>('cash')
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'tempo'>('cash')
   const [amountPaid, setAmountPaid] = useState<string>("")
   const [showReceipt, setShowReceipt] = useState(false)
 
@@ -291,12 +291,18 @@ export default function PosPage() {
 
                   <div className="space-y-2">
                     <Label>Metode Pembayaran</Label>
-                    <Tabs value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as 'cash' | 'transfer')} className="w-full">
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="cash"><DollarSign className="w-4 h-4 mr-2" />Tunai</TabsTrigger>
-                        <TabsTrigger value="transfer"><CreditCard className="w-4 h-4 mr-2" />Transfer</TabsTrigger>
+                    <Tabs value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as 'cash' | 'transfer' | 'tempo')} className="w-full">
+                      <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="cash"><DollarSign className="w-4 h-4 mr-1" />Tunai</TabsTrigger>
+                        <TabsTrigger value="transfer"><CreditCard className="w-4 h-4 mr-1" />Transfer</TabsTrigger>
+                        <TabsTrigger value="tempo"><Clock className="w-4 h-4 mr-1" />Tempo</TabsTrigger>
                       </TabsList>
                     </Tabs>
+                    {paymentMethod === 'tempo' && selectedCustomerId === 'umum' && (
+                      <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+                        ⚠️ Untuk pembayaran tempo, wajib pilih pelanggan (bukan Umum).
+                      </p>
+                    )}
                   </div>
 
                   {paymentMethod === 'cash' && (

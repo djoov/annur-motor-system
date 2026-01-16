@@ -379,7 +379,7 @@ export default function ItemsPage() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="minStock">Min. Stok Alert</Label>
-                        <Input id="minStock" type="number" value={formData.minStock} onChange={(e) => setFormData(p => ({ ...p, minStock: e.target.value }))} placeholder="5" />
+                        <Input id="minStock" type="number" min={0} value={formData.minStock} onChange={(e) => setFormData(p => ({ ...p, minStock: e.target.value }))} placeholder="5" />
                       </div>
                     </div>
 
@@ -388,14 +388,14 @@ export default function ItemsPage() {
                         <Label htmlFor="buyPrice" className="text-slate-600">Harga Beli (Modal)</Label>
                         <div className="relative">
                           <span className="absolute left-3 top-2.5 text-slate-400">Rp</span>
-                          <Input id="buyPrice" type="number" className="pl-9" value={formData.buyPrice} onChange={(e) => setFormData(p => ({ ...p, buyPrice: e.target.value }))} placeholder="0" />
+                          <Input id="buyPrice" type="number" min={0} className="pl-9" value={formData.buyPrice} onChange={(e) => setFormData(p => ({ ...p, buyPrice: e.target.value }))} placeholder="0" />
                         </div>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="sellPrice" className="text-blue-600 font-semibold">Harga Jual</Label>
                         <div className="relative">
                           <span className="absolute left-3 top-2.5 text-slate-400">Rp</span>
-                          <Input id="sellPrice" type="number" className="pl-9 font-semibold text-slate-900 border-blue-200 focus:border-blue-500" value={formData.sellPrice} onChange={(e) => setFormData(p => ({ ...p, sellPrice: e.target.value }))} placeholder="0" required />
+                          <Input id="sellPrice" type="number" min={0} className="pl-9 font-semibold text-slate-900 border-blue-200 focus:border-blue-500" value={formData.sellPrice} onChange={(e) => setFormData(p => ({ ...p, sellPrice: e.target.value }))} placeholder="0" required />
                         </div>
                       </div>
                     </div>
@@ -407,7 +407,7 @@ export default function ItemsPage() {
                           <Store className="w-4 h-4 text-blue-600" />
                           <Label htmlFor="stockDisplay">Stok Toko (Display)</Label>
                         </div>
-                        <Input id="stockDisplay" type="number" className="bg-white border-blue-200" value={formData.stockDisplay} onChange={(e) => setFormData(p => ({ ...p, stockDisplay: e.target.value }))} placeholder="0" />
+                        <Input id="stockDisplay" type="number" min={0} className="bg-white border-blue-200" value={formData.stockDisplay} onChange={(e) => setFormData(p => ({ ...p, stockDisplay: e.target.value }))} placeholder="0" />
                         <p className="text-[10px] text-slate-500">Barang di rak depan/etalase.</p>
                       </div>
                       <div className="space-y-2">
@@ -415,7 +415,7 @@ export default function ItemsPage() {
                           <Warehouse className="w-4 h-4 text-orange-600" />
                           <Label htmlFor="stockWarehouse">Stok Gudang (Utama)</Label>
                         </div>
-                        <Input id="stockWarehouse" type="number" className="bg-white border-orange-200" value={formData.stockWarehouse} onChange={(e) => setFormData(p => ({ ...p, stockWarehouse: e.target.value }))} placeholder="0" />
+                        <Input id="stockWarehouse" type="number" min={0} className="bg-white border-orange-200" value={formData.stockWarehouse} onChange={(e) => setFormData(p => ({ ...p, stockWarehouse: e.target.value }))} placeholder="0" />
                         <p className="text-[10px] text-slate-500">Stok penyimpanan belakang.</p>
                       </div>
                     </div>

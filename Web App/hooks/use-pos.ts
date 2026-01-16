@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Item, CartItem } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { collection, doc, writeBatch, serverTimestamp, increment } from "firebase/firestore";
+import { collection, doc, writeBatch, serverTimestamp, increment, Timestamp } from "firebase/firestore";
 
 export function usePos() {
     const { toast } = useToast();
@@ -73,13 +73,28 @@ export function usePos() {
     }, [cart]);
 
     // Checkout Logic
-    const processCheckout = async (customerId: string, customerName: string, paymentMethod: 'cash' | 'transfer', amountPaid: number) => {
+    const processCheckout = async (
+        customerId: string,
+        customerName: string,
+        paymentMethod: 'cash' | 'transfer' | 'tempo',
+        amountPaid: number,
+        dueDate?: Date // Optional due date for tempo payments
+    ) => {
         if (cart.length === 0) return false;
+
+        // Tempo requires a real customer
+        if (paymentMethod === 'tempo' && customerId === 'umum') {
+            toast({ title: "Pilih Pelanggan", description: "Pembayaran tempo harus memilih pelanggan.", variant: "destructive" });
+            return false;
+        }
 
         setIsProcessing(true);
         try {
             const batch = writeBatch(db);
             const transactionRef = doc(collection(db, "transactions"));
+
+            const isTempo = paymentMethod === 'tempo';
+            const paymentStatus = isTempo ? 'unpaid' : 'paid';
 
             // Transaction Data
             const transactionData = {
@@ -97,9 +112,9 @@ export function usePos() {
                     buyPrice: item.buyPrice || 0,
                 })),
                 paymentMethod,
-                amountPaid: paymentMethod === 'cash' ? amountPaid : cartSummary.totalAmount,
+                amountPaid: isTempo ? 0 : (paymentMethod === 'cash' ? amountPaid : cartSummary.totalAmount),
                 change: paymentMethod === 'cash' ? (amountPaid - cartSummary.totalAmount) : 0,
-                status: 'paid', // Default paid for POS
+                status: paymentStatus,
                 type: 'sale'
             };
 
@@ -108,24 +123,53 @@ export function usePos() {
             // Update Stock
             for (const item of cart) {
                 const itemRef = doc(db, "items", item.id);
-                // Logic: Sync with Mobile App -> Only deduct from Display Stock (Shop)
-                // Mobile App allows negative stock (deficits) on Display rather than complex warehouse deduction.
-
                 const qtyToDeduct = item.quantity || 0;
 
-                // Use FieldValue.increment for atomicity and consistency with Mobile
                 batch.update(itemRef, {
                     stockDisplay: increment(-qtyToDeduct),
-                    stock: increment(-qtyToDeduct), // Legacy field
-                    qty_display: increment(-qtyToDeduct), // Sync mobile field
-                    // qty_warehouse: item.stockWarehouse, // Do NOT touch warehouse stock
+                    stock: increment(-qtyToDeduct),
+                    qty_display: increment(-qtyToDeduct),
                     updatedAt: serverTimestamp()
                 });
             }
 
+            // Create Debt Record for Tempo Payments
+            if (isTempo) {
+                const debtRef = doc(collection(db, "debts"));
+                const now = serverTimestamp();
+
+                batch.set(debtRef, {
+                    customerId,
+                    customerName,
+                    transactionId: transactionRef.id,
+                    totalAmount: cartSummary.totalAmount,
+                    remainingAmount: cartSummary.totalAmount,
+                    status: 'unpaid',
+                    createdAt: now,
+                    updatedAt: now,
+                    dueDate: dueDate ? Timestamp.fromDate(dueDate) : null,
+                    logs: []
+                });
+
+                // Update Customer's totalDebt field
+                if (customerId !== 'umum') {
+                    const customerRef = doc(db, "customers", customerId);
+                    batch.update(customerRef, {
+                        totalDebt: increment(cartSummary.totalAmount),
+                        updatedAt: serverTimestamp()
+                    });
+                }
+            }
+
             await batch.commit();
 
-            toast({ title: "Transaksi Berhasil!", description: "Stok telah diperbarui." });
+            setLastTransaction({ ...transactionData, id: transactionRef.id });
+            clearCart();
+
+            const successMsg = isTempo
+                ? "Transaksi Tempo Dicatat! Hutang telah ditambahkan."
+                : "Transaksi Berhasil! Stok telah diperbarui.";
+            toast({ title: successMsg });
             return true;
         } catch (error) {
             console.error("Checkout Failed:", error);

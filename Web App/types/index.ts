@@ -54,8 +54,30 @@ export interface Transaction {
 
     // Extended fields for Mobile App compatibility
     type: 'sale' | 'return';
-    paymentMethod: 'cash' | 'transfer'; // cash, transfer
+    paymentMethod: 'cash' | 'transfer' | 'tempo'; // cash, transfer, tempo (hutang)
     paymentStatus: 'paid' | 'unpaid' | 'partial';
     cashierName?: string;
     returnedItems?: Record<string, number>;
 }
+
+// Debt/Piutang interfaces (synced with Mobile App)
+export interface DebtPaymentLog {
+    date: any; // Timestamp
+    amount: number;
+    note: string;
+}
+
+export interface Debt {
+    id: string;
+    customerId: string;
+    customerName: string;
+    transactionId: string;
+    totalAmount: number;
+    remainingAmount: number;
+    status: 'unpaid' | 'partial' | 'paid';
+    createdAt: any;
+    updatedAt: any;
+    dueDate?: any;
+    logs: DebtPaymentLog[];
+}
+

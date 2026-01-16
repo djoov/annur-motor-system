@@ -22,13 +22,13 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Store, Printer, Users, Plus, Edit, Trash2, Save, MapPin, Phone, Mail, CreditCard, UserCog } from "lucide-react"
+import { Store, Printer, Users, Plus, Edit, Trash2, Save, MapPin, Phone, Mail, CreditCard, UserCog, AlertTriangle, Database } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/components/auth-provider"
 
 // --- Impor dari Firebase ---
 import { db } from "@/lib/firebase"
-import { doc, getDoc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore"
+import { doc, getDoc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp, getDocs, writeBatch, query, where } from "firebase/firestore"
 
 // --- Interface untuk data ---
 interface StoreSettings {
@@ -73,6 +73,12 @@ export default function SettingsPage() {
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserData | null>(null)
   const [userForm, setUserForm] = useState({ name: '', email: '', role: 'staff' as 'admin' | 'staff' });
+
+  // State untuk reset data
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [resetType, setResetType] = useState<'transactions' | 'debts' | 'all'>('transactions');
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
 
   // --- Realtime Data Fetching ---
   useEffect(() => {
@@ -184,6 +190,67 @@ export default function SettingsPage() {
 
   const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
 
+  // Handler untuk reset data
+  const handleResetData = async () => {
+    if (resetConfirmText !== 'HAPUS SEMUA') {
+      toast({ title: 'Konfirmasi salah', description: 'Ketik "HAPUS SEMUA" untuk melanjutkan.', variant: 'destructive' });
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      const batch = writeBatch(db);
+      let deletedCount = 0;
+
+      // Reset Transactions
+      if (resetType === 'transactions' || resetType === 'all') {
+        const transactionsSnapshot = await getDocs(collection(db, 'transactions'));
+        transactionsSnapshot.docs.forEach(doc => {
+          batch.delete(doc.ref);
+          deletedCount++;
+        });
+      }
+
+      // Reset Debts
+      if (resetType === 'debts' || resetType === 'all') {
+        const debtsSnapshot = await getDocs(collection(db, 'debts'));
+        debtsSnapshot.docs.forEach(doc => {
+          batch.delete(doc.ref);
+          deletedCount++;
+        });
+
+        // Also reset totalDebt on all customers
+        const customersSnapshot = await getDocs(collection(db, 'customers'));
+        customersSnapshot.docs.forEach(doc => {
+          batch.update(doc.ref, { totalDebt: 0 });
+        });
+      }
+
+      // Reset Item Movements if resetting all
+      if (resetType === 'all') {
+        const movementsSnapshot = await getDocs(collection(db, 'itemMovements'));
+        movementsSnapshot.docs.forEach(doc => {
+          batch.delete(doc.ref);
+          deletedCount++;
+        });
+      }
+
+      await batch.commit();
+
+      toast({
+        title: 'Data Berhasil Dihapus',
+        description: `${deletedCount} record telah dihapus secara permanen.`
+      });
+      setIsResetDialogOpen(false);
+      setResetConfirmText('');
+    } catch (error) {
+      console.error('Reset error:', error);
+      toast({ title: 'Gagal menghapus data', description: 'Terjadi kesalahan sistem.', variant: 'destructive' });
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6 pb-20">
@@ -195,10 +262,11 @@ export default function SettingsPage() {
         </div>
 
         <Tabs defaultValue="store" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+          <TabsList className="grid w-full grid-cols-4 lg:w-[520px]">
             <TabsTrigger value="store" className="flex items-center gap-2"><Store className="h-4 w-4" />Info Toko</TabsTrigger>
             <TabsTrigger value="printer" className="flex items-center gap-2"><Printer className="h-4 w-4" />Printer</TabsTrigger>
             <TabsTrigger value="users" className="flex items-center gap-2"><Users className="h-4 w-4" />Pengguna</TabsTrigger>
+            <TabsTrigger value="danger" className="flex items-center gap-2 text-red-600 data-[state=active]:text-red-600"><AlertTriangle className="h-4 w-4" />Reset</TabsTrigger>
           </TabsList>
 
           {/* Store Settings Tab */}
@@ -362,6 +430,54 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Danger Zone Tab */}
+          <TabsContent value="danger">
+            <Card className="border-red-200 shadow-sm bg-red-50/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-red-700">
+                  <AlertTriangle className="w-5 h-5" /> Zona Berbahaya
+                </CardTitle>
+                <CardDescription className="text-red-600">
+                  Operasi di bawah ini bersifat PERMANEN dan tidak dapat dibatalkan.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Reset Transactions */}
+                <div className="p-4 bg-white rounded-lg border border-red-200 flex justify-between items-center">
+                  <div>
+                    <h4 className="font-medium text-slate-800">Reset Riwayat Transaksi</h4>
+                    <p className="text-sm text-slate-500">Hapus semua data penjualan dari sistem.</p>
+                  </div>
+                  <Button variant="outline" className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => { setResetType('transactions'); setResetConfirmText(''); setIsResetDialogOpen(true); }}>
+                    <Trash2 className="w-4 h-4 mr-2" /> Reset
+                  </Button>
+                </div>
+
+                {/* Reset Debts */}
+                <div className="p-4 bg-white rounded-lg border border-red-200 flex justify-between items-center">
+                  <div>
+                    <h4 className="font-medium text-slate-800">Reset Data Hutang/Piutang</h4>
+                    <p className="text-sm text-slate-500">Hapus semua data piutang pelanggan.</p>
+                  </div>
+                  <Button variant="outline" className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => { setResetType('debts'); setResetConfirmText(''); setIsResetDialogOpen(true); }}>
+                    <Trash2 className="w-4 h-4 mr-2" /> Reset
+                  </Button>
+                </div>
+
+                {/* Reset All */}
+                <div className="p-4 bg-red-100 rounded-lg border-2 border-red-300 flex justify-between items-center">
+                  <div>
+                    <h4 className="font-bold text-red-700">Reset Semua Data Transaksi</h4>
+                    <p className="text-sm text-red-600">Hapus transaksi, hutang, dan arus stok sekaligus.</p>
+                  </div>
+                  <Button variant="destructive" className="bg-red-600 hover:bg-red-700" onClick={() => { setResetType('all'); setResetConfirmText(''); setIsResetDialogOpen(true); }}>
+                    <Database className="w-4 h-4 mr-2" /> Reset Semua
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
 
         {/* Dialog for Edit User */}
@@ -401,6 +517,57 @@ export default function SettingsPage() {
                 </Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reset Confirmation Dialog */}
+        <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-700">
+                <AlertTriangle className="w-5 h-5" /> Konfirmasi Penghapusan
+              </DialogTitle>
+              <DialogDescription className="text-slate-600">
+                {resetType === 'transactions' && 'Anda akan menghapus SEMUA riwayat transaksi penjualan.'}
+                {resetType === 'debts' && 'Anda akan menghapus SEMUA data piutang pelanggan.'}
+                {resetType === 'all' && 'Anda akan menghapus transaksi, piutang, dan arus stok sekaligus.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="p-3 bg-red-50 rounded-lg border border-red-200 text-center">
+                <p className="text-sm text-red-600 font-medium">
+                  ⚠️ Operasi ini TIDAK DAPAT dibatalkan!
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmText" className="text-slate-600">
+                  Ketik <span className="font-bold text-red-600">HAPUS SEMUA</span> untuk konfirmasi:
+                </Label>
+                <Input
+                  id="confirmText"
+                  value={resetConfirmText}
+                  onChange={(e) => setResetConfirmText(e.target.value)}
+                  placeholder="HAPUS SEMUA"
+                  className="border-red-200 focus:border-red-400"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsResetDialogOpen(false)} disabled={isResetting}>
+                Batal
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleResetData}
+                disabled={isResetting || resetConfirmText !== 'HAPUS SEMUA'}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isResetting ? "Menghapus..." : "Hapus Permanen"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

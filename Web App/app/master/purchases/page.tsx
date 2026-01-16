@@ -273,7 +273,10 @@ export default function PurchasesPage() {
       // Revert Stock
       for (const it of purchase.items) {
         const itemRef = doc(db, "items", it.itemId);
-        batch.update(itemRef, { stock: increment(-it.quantity) })
+        batch.update(itemRef, {
+          stock: increment(-it.quantity),
+          qty_display: increment(-it.quantity) // Sync with Mobile
+        })
 
         // Log Reversal
         const movementRef = doc(collection(db, "itemMovements"));

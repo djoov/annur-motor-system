@@ -181,21 +181,21 @@ export default function CustomersPage() {
                 <form onSubmit={handleSubmit} className="space-y-4 py-4">
                   <div className="grid gap-2">
                     <Label htmlFor="name">Nama Lengkap</Label>
-                    <Input id="name" value={formData.name} onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))} required />
+                    <Input id="name" value={formData.name} onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))} required maxLength={100} placeholder="Maks. 100 karakter" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="phone">No. HP / WA</Label>
-                      <Input id="phone" value={formData.phone} onChange={(e) => setFormData(p => ({ ...p, phone: e.target.value }))} required />
+                      <Input id="phone" type="tel" value={formData.phone} onChange={(e) => setFormData(p => ({ ...p, phone: e.target.value.replace(/[^0-9+\-\s]/g, '') }))} required maxLength={20} placeholder="08xxx" />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="email">Email (Opsional)</Label>
-                      <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData(p => ({ ...p, email: e.target.value }))} />
+                      <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData(p => ({ ...p, email: e.target.value }))} maxLength={100} placeholder="email@contoh.com" />
                     </div>
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="address">Alamat Domisili</Label>
-                    <Textarea id="address" value={formData.address} onChange={(e) => setFormData(p => ({ ...p, address: e.target.value }))} rows={3} />
+                    <Textarea id="address" value={formData.address} onChange={(e) => setFormData(p => ({ ...p, address: e.target.value }))} rows={3} maxLength={500} placeholder="Maks. 500 karakter" />
                   </div>
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Batal</Button>
