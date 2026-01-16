@@ -25,7 +25,7 @@ export function PublicNavbar() {
         <nav className="hidden md:flex items-center space-x-8 absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
           <Link href="/#layanan" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors uppercase tracking-wide">Layanan</Link>
           <Link href="/katalog" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors uppercase tracking-wide">Katalog</Link>
-          <Link href="/#lokasi" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors uppercase tracking-wide">Lokasi</Link>
+          <Link href="/oli" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors uppercase tracking-wide">Ganti Oli</Link>
         </nav>
 
         {/* Right side placeholder (Login button could go here in future) */}
