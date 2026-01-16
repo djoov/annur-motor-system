@@ -1,0 +1,15 @@
+# Netlify Configuration for Next.js App
+[build]
+  base = "Web App"
+  command = "npm run build"
+  publish = ".next"
+
+# Next.js plugin (handles SSR / static rendering)
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# SPA fallback for client-side routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
