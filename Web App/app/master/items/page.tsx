@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Edit, Trash2, Search, Package, UploadCloud, X, QrCode, Store, Warehouse, AlertTriangle } from "lucide-react"
+import { Plus, Edit, Trash2, Search, Package, UploadCloud, X, QrCode, Store, Warehouse, AlertTriangle, Eye } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { db } from "@/lib/firebase"
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, limit } from "firebase/firestore"
@@ -71,6 +71,8 @@ export default function ItemsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<Item | null>(null)
+  const [selectedItem, setSelectedItem] = useState<Item | null>(null)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
 
   // Updated FormData state to include separate stock fields
   const [formData, setFormData] = useState({
@@ -286,288 +288,415 @@ export default function ItemsPage() {
   }
 
   return (
-    <MainLayout>
-      <div className="space-y-6 pb-20">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900">Master Data Barang</h1>
-            <p className="text-slate-500">Kelola inventaris, harga, dan stok multi-gudang.</p>
-          </div>
-          <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
-            <DialogTrigger asChild>
-              <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="mr-2 h-4 w-4" /> Tambah Barang
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editingItem ? "Edit Data Barang" : "Tambah Barang Baru"}</DialogTitle>
-                <CardDescription>Pastikan kode barang unik dan data stok akurat.</CardDescription>
-              </DialogHeader>
+    <>
+      <MainLayout>
+        <div className="space-y-6 pb-20">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Master Data Barang</h1>
+              <p className="text-slate-500">Kelola inventaris, harga, dan stok multi-gudang.</p>
+            </div>
+            <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="mr-2 h-4 w-4" /> Tambah Barang
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{editingItem ? "Edit Data Barang" : "Tambah Barang Baru"}</DialogTitle>
+                  <CardDescription>Pastikan kode barang unik dan data stok akurat.</CardDescription>
+                </DialogHeader>
 
-              <form onSubmit={handleSubmit} className="space-y-6 mt-4">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
 
-                  {/* Left Column: Image & Basic Info */}
-                  <div className="md:col-span-4 space-y-4">
-                    <div className="flex flex-col items-center gap-4 p-4 border rounded-lg bg-slate-50/50">
-                      <div className="relative w-full aspect-square border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center overflow-hidden hover:bg-slate-100 transition-colors cursor-pointer group" onClick={() => fileInputRef.current?.click()}>
-                        {imageBase64 ? (
-                          <>
-                            <Image src={imageBase64} alt="Preview" fill className="object-cover" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs">
-                              Klik untuk ganti
+                    {/* Left Column: Image & Basic Info */}
+                    <div className="md:col-span-4 space-y-4">
+                      <div className="flex flex-col items-center gap-4 p-4 border rounded-lg bg-slate-50/50">
+                        <div className="relative w-full aspect-square border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center overflow-hidden hover:bg-slate-100 transition-colors cursor-pointer group" onClick={() => fileInputRef.current?.click()}>
+                          {imageBase64 ? (
+                            <>
+                              <Image src={imageBase64} alt="Preview" fill className="object-cover" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs">
+                                Klik untuk ganti
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-center text-slate-400">
+                              <UploadCloud className="mx-auto h-12 w-12 mb-2 opacity-50" />
+                              <span className="text-xs">Upload Gambar (Max 1MB)</span>
                             </div>
-                          </>
-                        ) : (
-                          <div className="text-center text-slate-400">
-                            <UploadCloud className="mx-auto h-12 w-12 mb-2 opacity-50" />
-                            <span className="text-xs">Upload Gambar (Max 1MB)</span>
+                          )}
+                        </div>
+                        <Input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} accept="image/*" />
+
+                        {imageBase64 && (
+                          <Button type="button" variant="outline" size="sm" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); setImageBase64(null); }}>
+                            <Trash2 className="w-4 h-4 mr-2" /> Hapus Gambar
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="p-4 border rounded-lg bg-white space-y-2 text-center">
+                        <Label>QR Code Preview</Label>
+                        <div className="flex justify-center py-2 bg-white">
+                          <QRCodeCanvas id="qr-code-canvas" value={formData.code || 'ANNUR-MOTOR'} size={150} level="H" />
+                        </div>
+                        <p className="text-xs text-slate-400">{formData.code || 'Kode belum diisi'}</p>
+                        {editingItem && formData.code && (
+                          <Button type="button" variant="ghost" size="sm" onClick={handleDownloadQR} className="w-full text-xs">
+                            <QrCode className="w-3 h-3 mr-2" /> Download QR
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right Column: Details */}
+                    <div className="md:col-span-8 space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="code">Kode Barang <span className="text-red-500">*</span></Label>
+                          <Input id="code" value={formData.code} onChange={(e) => setFormData(p => ({ ...p, code: e.target.value.toUpperCase() }))} placeholder="Ex: BAN-001" required className="font-mono uppercase" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="barcode">Barcode (Opsional)</Label>
+                          <Input id="barcode" value={formData.barcode} onChange={(e) => setFormData(p => ({ ...p, barcode: e.target.value }))} placeholder="Scan barcode..." />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Nama Barang <span className="text-red-500">*</span></Label>
+                        <Input id="name" value={formData.name} onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))} placeholder="Contoh: Oli Yamalube Sport 1L" required />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="category">Kategori</Label>
+                          <Select value={formData.category} onValueChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}>
+                            <SelectTrigger><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
+                            <SelectContent>
+                              {categories.map((c) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="minStock">Min. Stok Alert</Label>
+                          <Input id="minStock" type="number" min={0} value={formData.minStock} onChange={(e) => setFormData(p => ({ ...p, minStock: e.target.value }))} placeholder="5" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-lg border">
+                        <div className="space-y-2">
+                          <Label htmlFor="buyPrice" className="text-slate-600">Harga Beli (Modal)</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-slate-400">Rp</span>
+                            <Input id="buyPrice" type="number" min={0} className="pl-9" value={formData.buyPrice} onChange={(e) => setFormData(p => ({ ...p, buyPrice: e.target.value }))} placeholder="0" />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="sellPrice" className="text-blue-600 font-semibold">Harga Jual</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-slate-400">Rp</span>
+                            <Input id="sellPrice" type="number" min={0} className="pl-9 font-semibold text-slate-900 border-blue-200 focus:border-blue-500" value={formData.sellPrice} onChange={(e) => setFormData(p => ({ ...p, sellPrice: e.target.value }))} placeholder="0" required />
+                          </div>
+                        </div>
+
+                        {/* Auto-calculated Profit Display */}
+                        {(Number(formData.buyPrice) > 0 || Number(formData.sellPrice) > 0) && (
+                          <div className="col-span-2 pt-3 mt-2 border-t border-slate-200">
+                            {(() => {
+                              const buyPrice = Number(formData.buyPrice) || 0;
+                              const sellPrice = Number(formData.sellPrice) || 0;
+                              const profit = sellPrice - buyPrice;
+                              const profitPercent = buyPrice > 0 ? ((profit / buyPrice) * 100).toFixed(1) : 0;
+                              const isPositive = profit > 0;
+                              const isNegative = profit < 0;
+
+                              return (
+                                <div className={`flex items-center justify-between p-3 rounded-lg ${isPositive ? 'bg-emerald-50 border border-emerald-200' : isNegative ? 'bg-red-50 border border-red-200' : 'bg-slate-100 border border-slate-200'}`}>
+                                  <span className="text-sm font-medium text-slate-600">Estimasi Keuntungan:</span>
+                                  <div className="text-right">
+                                    <p className={`font-bold text-lg ${isPositive ? 'text-emerald-600' : isNegative ? 'text-red-600' : 'text-slate-500'}`}>
+                                      {isNegative ? '-' : '+'} Rp {Math.abs(profit).toLocaleString('id-ID')}
+                                    </p>
+                                    {buyPrice > 0 && (
+                                      <p className={`text-xs ${isPositive ? 'text-emerald-500' : isNegative ? 'text-red-500' : 'text-slate-400'}`}>
+                                        ({isNegative ? '' : '+'}{profitPercent}% margin)
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         )}
                       </div>
-                      <Input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} accept="image/*" />
 
-                      {imageBase64 && (
-                        <Button type="button" variant="outline" size="sm" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); setImageBase64(null); }}>
-                          <Trash2 className="w-4 h-4 mr-2" /> Hapus Gambar
-                        </Button>
-                      )}
-                    </div>
-
-                    <div className="p-4 border rounded-lg bg-white space-y-2 text-center">
-                      <Label>QR Code Preview</Label>
-                      <div className="flex justify-center py-2 bg-white">
-                        <QRCodeCanvas id="qr-code-canvas" value={formData.code || 'ANNUR-MOTOR'} size={150} level="H" />
+                      {/* Multi Warehouse Stock Inputs */}
+                      <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Store className="w-4 h-4 text-blue-600" />
+                            <Label htmlFor="stockDisplay">Stok Toko (Display)</Label>
+                          </div>
+                          <Input id="stockDisplay" type="number" min={0} className="bg-white border-blue-200" value={formData.stockDisplay} onChange={(e) => setFormData(p => ({ ...p, stockDisplay: e.target.value }))} placeholder="0" />
+                          <p className="text-[10px] text-slate-500">Barang di rak depan/etalase.</p>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Warehouse className="w-4 h-4 text-orange-600" />
+                            <Label htmlFor="stockWarehouse">Stok Gudang (Utama)</Label>
+                          </div>
+                          <Input id="stockWarehouse" type="number" min={0} className="bg-white border-orange-200" value={formData.stockWarehouse} onChange={(e) => setFormData(p => ({ ...p, stockWarehouse: e.target.value }))} placeholder="0" />
+                          <p className="text-[10px] text-slate-500">Stok penyimpanan belakang.</p>
+                        </div>
                       </div>
-                      <p className="text-xs text-slate-400">{formData.code || 'Kode belum diisi'}</p>
-                      {editingItem && formData.code && (
-                        <Button type="button" variant="ghost" size="sm" onClick={handleDownloadQR} className="w-full text-xs">
-                          <QrCode className="w-3 h-3 mr-2" /> Download QR
-                        </Button>
-                      )}
+
+                      <div className="space-y-2">
+                        <Label htmlFor="description">Deskripsi</Label>
+                        <Textarea id="description" value={formData.description} onChange={(e) => setFormData(p => ({ ...p, description: e.target.value }))} rows={2} placeholder="Keterangan tambahan..." />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Right Column: Details */}
-                  <div className="md:col-span-8 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="code">Kode Barang <span className="text-red-500">*</span></Label>
-                        <Input id="code" value={formData.code} onChange={(e) => setFormData(p => ({ ...p, code: e.target.value.toUpperCase() }))} placeholder="Ex: BAN-001" required className="font-mono uppercase" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="barcode">Barcode (Opsional)</Label>
-                        <Input id="barcode" value={formData.barcode} onChange={(e) => setFormData(p => ({ ...p, barcode: e.target.value }))} placeholder="Scan barcode..." />
-                      </div>
-                    </div>
+                  <DialogFooter className="pt-4 border-t">
+                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>Batal</Button>
+                    <Button type="submit" disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 w-32">
+                      {isSaving ? "Menyimpan..." : (editingItem ? "Update Data" : "Simpan Data")}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Nama Barang <span className="text-red-500">*</span></Label>
-                      <Input id="name" value={formData.name} onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))} placeholder="Contoh: Oli Yamalube Sport 1L" required />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="category">Kategori</Label>
-                        <Select value={formData.category} onValueChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}>
-                          <SelectTrigger><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
-                          <SelectContent>
-                            {categories.map((c) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="minStock">Min. Stok Alert</Label>
-                        <Input id="minStock" type="number" min={0} value={formData.minStock} onChange={(e) => setFormData(p => ({ ...p, minStock: e.target.value }))} placeholder="5" />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-lg border">
-                      <div className="space-y-2">
-                        <Label htmlFor="buyPrice" className="text-slate-600">Harga Beli (Modal)</Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-2.5 text-slate-400">Rp</span>
-                          <Input id="buyPrice" type="number" min={0} className="pl-9" value={formData.buyPrice} onChange={(e) => setFormData(p => ({ ...p, buyPrice: e.target.value }))} placeholder="0" />
+          <Card className="shadow-md border-slate-200">
+            <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex items-center space-x-2 w-full md:w-auto">
+                  <div className="relative w-full md:w-72">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input placeholder="Cari nama, kode, atau kategori..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 bg-white" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-white px-3 py-1 font-normal text-slate-600">Total: {filteredItems.length} Barang</Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase tracking-wider">
+                    <tr>
+                      <th className="px-6 py-4 text-left w-20">Foto</th>
+                      <th className="px-6 py-4 text-left">Kode / Nama</th>
+                      <th className="px-6 py-4 text-left">Kategori</th>
+                      <th className="px-6 py-4 text-right">Harga</th>
+                      <th className="px-6 py-4 text-center w-32">
+                        <div className="flex flex-col">
+                          <span>Stok Total</span>
+                          <span className="text-[10px] lowercase font-normal">(Toko + Gudang)</span>
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="sellPrice" className="text-blue-600 font-semibold">Harga Jual</Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-2.5 text-slate-400">Rp</span>
-                          <Input id="sellPrice" type="number" min={0} className="pl-9 font-semibold text-slate-900 border-blue-200 focus:border-blue-500" value={formData.sellPrice} onChange={(e) => setFormData(p => ({ ...p, sellPrice: e.target.value }))} placeholder="0" required />
-                        </div>
-                      </div>
+                      </th>
+                      <th className="px-6 py-4 text-center w-24">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white text-sm">
+                    {isLoading ? (
+                      <tr><td colSpan={6} className="text-center p-8 text-slate-400">Memuat data barang...</td></tr>
+                    ) : filteredItems.length === 0 ? (
+                      <tr><td colSpan={6} className="text-center p-8 text-slate-400">Tidak ada barang yang ditemukan.</td></tr>
+                    ) : sortedItems.map((item) => {
+                      const totalStock = (item.stockDisplay || 0) + (item.stockWarehouse || 0);
+                      const isLowStock = totalStock <= (item.minStock || 5);
 
-                      {/* Auto-calculated Profit Display */}
-                      {(Number(formData.buyPrice) > 0 || Number(formData.sellPrice) > 0) && (
-                        <div className="col-span-2 pt-3 mt-2 border-t border-slate-200">
-                          {(() => {
-                            const buyPrice = Number(formData.buyPrice) || 0;
-                            const sellPrice = Number(formData.sellPrice) || 0;
-                            const profit = sellPrice - buyPrice;
-                            const profitPercent = buyPrice > 0 ? ((profit / buyPrice) * 100).toFixed(1) : 0;
-                            const isPositive = profit > 0;
-                            const isNegative = profit < 0;
-
-                            return (
-                              <div className={`flex items-center justify-between p-3 rounded-lg ${isPositive ? 'bg-emerald-50 border border-emerald-200' : isNegative ? 'bg-red-50 border border-red-200' : 'bg-slate-100 border border-slate-200'}`}>
-                                <span className="text-sm font-medium text-slate-600">Estimasi Keuntungan:</span>
-                                <div className="text-right">
-                                  <p className={`font-bold text-lg ${isPositive ? 'text-emerald-600' : isNegative ? 'text-red-600' : 'text-slate-500'}`}>
-                                    {isNegative ? '-' : '+'} Rp {Math.abs(profit).toLocaleString('id-ID')}
-                                  </p>
-                                  {buyPrice > 0 && (
-                                    <p className={`text-xs ${isPositive ? 'text-emerald-500' : isNegative ? 'text-red-500' : 'text-slate-400'}`}>
-                                      ({isNegative ? '' : '+'}{profitPercent}% margin)
-                                    </p>
-                                  )}
-                                </div>
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => { setSelectedItem(item); setIsDetailOpen(true); }}>
+                          <td className="px-6 py-3">
+                            <div className="h-12 w-12 relative bg-slate-100 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center">
+                              {item.imageUrl ? (
+                                <Image src={item.imageUrl} alt={item.name} fill className="object-cover" />
+                              ) : (
+                                <Package className="text-slate-300 w-6 h-6" />
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-3">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{item.name}</span>
+                              <span className="text-xs font-mono text-slate-500">{item.code}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-3">
+                            <Badge variant="secondary" className="font-normal text-xs bg-slate-100 text-slate-600">{item.category || '-'}</Badge>
+                          </td>
+                          <td className="px-6 py-3 text-right font-medium text-slate-700">
+                            Rp {(item.sellPrice || 0).toLocaleString("id-ID")}
+                          </td>
+                          <td className="px-6 py-3 text-center">
+                            <div className={`inline-flex flex-col items-center justify-center px-3 py-1 rounded-md border ${isLowStock ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50/50 border-green-100 text-slate-700'}`}>
+                              <span className="font-bold">{totalStock}</span>
+                              <span className="text-[10px] opacity-70">
+                                {item.stockDisplay || 0} + {item.stockWarehouse || 0}
+                              </span>
+                            </div>
+                            {isLowStock && (
+                              <div className="mt-1 flex items-center justify-center text-[10px] text-red-500 font-medium">
+                                <AlertTriangle className="w-3 h-3 mr-1" /> Restok
                               </div>
-                            );
-                          })()}
+                            )}
+                          </td>
+                          <td className="px-6 py-3 text-center">
+                            <div className="flex justify-center gap-2">
+                              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSelectedItem(item); setIsDetailOpen(true); }} className="h-8 w-8 text-slate-500 hover:bg-slate-100" title="Lihat Detail">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleEdit(item); }} className="h-8 w-8 text-blue-600 hover:bg-blue-50">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }} className="h-8 w-8 text-red-600 hover:bg-red-50">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="p-4 border-t border-slate-100 text-xs text-slate-500 flex justify-between items-center">
+                <span>Menampilkan {filteredItems.length} item</span>
+                <span>Data disinkronisasi dengan Mobile App</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </MainLayout>
+
+      {/* Item Detail Modal */}
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="max-w-2xl">
+          {selectedItem && (() => {
+            const buyPrice = selectedItem.buyPrice || 0;
+            const sellPrice = selectedItem.sellPrice || 0;
+            const profit = sellPrice - buyPrice;
+            const profitPercent = buyPrice > 0 ? ((profit / buyPrice) * 100).toFixed(1) : '0';
+            const totalStock = (selectedItem.stockDisplay || 0) + (selectedItem.stockWarehouse || 0);
+            const isLowStock = totalStock <= (selectedItem.minStock || 5);
+
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Package className="w-5 h-5 text-blue-600" />
+                    Detail Barang
+                  </DialogTitle>
+                </DialogHeader>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4">
+                  {/* Image & QR */}
+                  <div className="space-y-4">
+                    <div className="relative aspect-square rounded-xl border border-slate-200 overflow-hidden bg-slate-50">
+                      {selectedItem.imageUrl ? (
+                        <Image src={selectedItem.imageUrl} alt={selectedItem.name} fill className="object-cover" />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-slate-300">
+                          <Package className="w-16 h-16" />
                         </div>
                       )}
                     </div>
+                    <div className="p-3 border rounded-lg bg-white text-center">
+                      <QRCodeCanvas value={selectedItem.code || 'ANNUR'} size={100} level="H" className="mx-auto" />
+                      <p className="text-xs text-slate-400 mt-2">{selectedItem.code}</p>
+                    </div>
+                  </div>
 
-                    {/* Multi Warehouse Stock Inputs */}
-                    <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Store className="w-4 h-4 text-blue-600" />
-                          <Label htmlFor="stockDisplay">Stok Toko (Display)</Label>
-                        </div>
-                        <Input id="stockDisplay" type="number" min={0} className="bg-white border-blue-200" value={formData.stockDisplay} onChange={(e) => setFormData(p => ({ ...p, stockDisplay: e.target.value }))} placeholder="0" />
-                        <p className="text-[10px] text-slate-500">Barang di rak depan/etalase.</p>
+                  {/* Info */}
+                  <div className="md:col-span-2 space-y-4">
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase tracking-wide">Nama Barang</p>
+                      <h3 className="text-xl font-bold text-slate-800">{selectedItem.name}</h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-slate-400">Kode</p>
+                        <p className="font-mono font-medium text-slate-700">{selectedItem.code || '-'}</p>
                       </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Warehouse className="w-4 h-4 text-orange-600" />
-                          <Label htmlFor="stockWarehouse">Stok Gudang (Utama)</Label>
-                        </div>
-                        <Input id="stockWarehouse" type="number" min={0} className="bg-white border-orange-200" value={formData.stockWarehouse} onChange={(e) => setFormData(p => ({ ...p, stockWarehouse: e.target.value }))} placeholder="0" />
-                        <p className="text-[10px] text-slate-500">Stok penyimpanan belakang.</p>
+                      <div>
+                        <p className="text-xs text-slate-400">Kategori</p>
+                        <Badge variant="secondary" className="mt-1">{selectedItem.category || 'Tidak ada'}</Badge>
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Deskripsi</Label>
-                      <Textarea id="description" value={formData.description} onChange={(e) => setFormData(p => ({ ...p, description: e.target.value }))} rows={2} placeholder="Keterangan tambahan..." />
+                    {selectedItem.description && (
+                      <div>
+                        <p className="text-xs text-slate-400">Deskripsi</p>
+                        <p className="text-sm text-slate-600">{selectedItem.description}</p>
+                      </div>
+                    )}
+
+                    {/* Prices */}
+                    <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 rounded-lg border">
+                      <div className="text-center">
+                        <p className="text-xs text-slate-400">Harga Beli</p>
+                        <p className="font-medium text-slate-600">Rp {buyPrice.toLocaleString('id-ID')}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-slate-400">Harga Jual</p>
+                        <p className="font-bold text-blue-600">Rp {sellPrice.toLocaleString('id-ID')}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-slate-400">Keuntungan</p>
+                        <p className={`font-bold ${profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          Rp {profit.toLocaleString('id-ID')}
+                        </p>
+                        <p className={`text-[10px] ${profit >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>({profitPercent}%)</p>
+                      </div>
                     </div>
+
+                    {/* Stocks */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className={`p-3 rounded-lg border text-center ${isLowStock ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-100'}`}>
+                        <Store className="w-5 h-5 mx-auto text-blue-600 mb-1" />
+                        <p className="text-xs text-slate-500">Stok Toko</p>
+                        <p className="font-bold text-lg text-slate-800">{selectedItem.stockDisplay || 0}</p>
+                      </div>
+                      <div className="p-3 rounded-lg border bg-orange-50 border-orange-100 text-center">
+                        <Warehouse className="w-5 h-5 mx-auto text-orange-600 mb-1" />
+                        <p className="text-xs text-slate-500">Stok Gudang</p>
+                        <p className="font-bold text-lg text-slate-800">{selectedItem.stockWarehouse || 0}</p>
+                      </div>
+                      <div className={`p-3 rounded-lg border text-center ${isLowStock ? 'bg-red-100 border-red-300' : 'bg-emerald-50 border-emerald-100'}`}>
+                        <Package className={`w-5 h-5 mx-auto mb-1 ${isLowStock ? 'text-red-600' : 'text-emerald-600'}`} />
+                        <p className="text-xs text-slate-500">Total</p>
+                        <p className={`font-bold text-lg ${isLowStock ? 'text-red-700' : 'text-emerald-700'}`}>{totalStock}</p>
+                      </div>
+                    </div>
+
+                    {isLowStock && (
+                      <div className="flex items-center gap-2 p-3 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span>Stok di bawah minimum ({selectedItem.minStock || 5}). Segera lakukan restok!</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <DialogFooter className="pt-4 border-t">
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>Batal</Button>
-                  <Button type="submit" disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 w-32">
-                    {isSaving ? "Menyimpan..." : (editingItem ? "Update Data" : "Simpan Data")}
+                <DialogFooter className="gap-2">
+                  <Button variant="outline" onClick={() => setIsDetailOpen(false)}>Tutup</Button>
+                  <Button onClick={() => { setIsDetailOpen(false); handleEdit(selectedItem); }} className="bg-blue-600 hover:bg-blue-700">
+                    <Edit className="w-4 h-4 mr-2" /> Edit Barang
                   </Button>
                 </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        <Card className="shadow-md border-slate-200">
-          <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="flex items-center space-x-2 w-full md:w-auto">
-                <div className="relative w-full md:w-72">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                  <Input placeholder="Cari nama, kode, atau kategori..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 bg-white" />
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="bg-white px-3 py-1 font-normal text-slate-600">Total: {filteredItems.length} Barang</Badge>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                  <tr>
-                    <th className="px-6 py-4 text-left w-20">Foto</th>
-                    <th className="px-6 py-4 text-left">Kode / Nama</th>
-                    <th className="px-6 py-4 text-left">Kategori</th>
-                    <th className="px-6 py-4 text-right">Harga</th>
-                    <th className="px-6 py-4 text-center w-32">
-                      <div className="flex flex-col">
-                        <span>Stok Total</span>
-                        <span className="text-[10px] lowercase font-normal">(Toko + Gudang)</span>
-                      </div>
-                    </th>
-                    <th className="px-6 py-4 text-center w-24">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white text-sm">
-                  {isLoading ? (
-                    <tr><td colSpan={6} className="text-center p-8 text-slate-400">Memuat data barang...</td></tr>
-                  ) : filteredItems.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center p-8 text-slate-400">Tidak ada barang yang ditemukan.</td></tr>
-                  ) : sortedItems.map((item) => {
-                    const totalStock = (item.stockDisplay || 0) + (item.stockWarehouse || 0);
-                    const isLowStock = totalStock <= (item.minStock || 5);
-
-                    return (
-                      <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
-                        <td className="px-6 py-3">
-                          <div className="h-12 w-12 relative bg-slate-100 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center">
-                            {item.imageUrl ? (
-                              <Image src={item.imageUrl} alt={item.name} fill className="object-cover" />
-                            ) : (
-                              <Package className="text-slate-300 w-6 h-6" />
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-3">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{item.name}</span>
-                            <span className="text-xs font-mono text-slate-500">{item.code}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-3">
-                          <Badge variant="secondary" className="font-normal text-xs bg-slate-100 text-slate-600">{item.category || '-'}</Badge>
-                        </td>
-                        <td className="px-6 py-3 text-right font-medium text-slate-700">
-                          Rp {(item.sellPrice || 0).toLocaleString("id-ID")}
-                        </td>
-                        <td className="px-6 py-3 text-center">
-                          <div className={`inline-flex flex-col items-center justify-center px-3 py-1 rounded-md border ${isLowStock ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50/50 border-green-100 text-slate-700'}`}>
-                            <span className="font-bold">{totalStock}</span>
-                            <span className="text-[10px] opacity-70">
-                              {item.stockDisplay || 0} + {item.stockWarehouse || 0}
-                            </span>
-                          </div>
-                          {isLowStock && (
-                            <div className="mt-1 flex items-center justify-center text-[10px] text-red-500 font-medium">
-                              <AlertTriangle className="w-3 h-3 mr-1" /> Restok
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-3 text-center">
-                          <div className="flex justify-center gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(item)} className="h-8 w-8 text-blue-600 hover:bg-blue-50">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id)} className="h-8 w-8 text-red-600 hover:bg-red-50">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="p-4 border-t border-slate-100 text-xs text-slate-500 flex justify-between items-center">
-              <span>Menampilkan {filteredItems.length} item</span>
-              <span>Data disinkronisasi dengan Mobile App</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </MainLayout>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
