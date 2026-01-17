@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { toast } = useToast() // <-- Panggil hook di sini
 
-  const publicPaths = ['/', '/katalog'];
+  const publicPaths = ['/', '/katalog', '/oli'];
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {

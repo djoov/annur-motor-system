@@ -178,18 +178,15 @@ export default async function OilChangePage() {
                                     </div>
                                     <h3 className="font-bold text-slate-800 text-sm mb-1 group-hover:text-amber-600 transition-colors line-clamp-2">{product.name}</h3>
                                     {product.code && (
-                                        <p className="text-[10px] text-slate-400 font-mono mb-1">{product.code}</p>
+                                        <p className="text-[10px] text-slate-400 font-mono">{product.code}</p>
                                     )}
-                                    <p className="text-sm font-semibold text-amber-600">
-                                        Rp {(product.sellPrice || 0).toLocaleString('id-ID')}
-                                    </p>
                                 </div>
                             ))}
                         </div>
                     )}
 
                     <p className="text-center mt-8 text-sm text-slate-500">
-                        * Harga dapat berubah sewaktu-waktu. Hubungi kami untuk informasi terbaru.
+                        * Hubungi kami untuk informasi harga dan ketersediaan produk.
                     </p>
                 </div>
             </section>
