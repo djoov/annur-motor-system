@@ -398,6 +398,36 @@ export default function ItemsPage() {
                           <Input id="sellPrice" type="number" min={0} className="pl-9 font-semibold text-slate-900 border-blue-200 focus:border-blue-500" value={formData.sellPrice} onChange={(e) => setFormData(p => ({ ...p, sellPrice: e.target.value }))} placeholder="0" required />
                         </div>
                       </div>
+
+                      {/* Auto-calculated Profit Display */}
+                      {(Number(formData.buyPrice) > 0 || Number(formData.sellPrice) > 0) && (
+                        <div className="col-span-2 pt-3 mt-2 border-t border-slate-200">
+                          {(() => {
+                            const buyPrice = Number(formData.buyPrice) || 0;
+                            const sellPrice = Number(formData.sellPrice) || 0;
+                            const profit = sellPrice - buyPrice;
+                            const profitPercent = buyPrice > 0 ? ((profit / buyPrice) * 100).toFixed(1) : 0;
+                            const isPositive = profit > 0;
+                            const isNegative = profit < 0;
+
+                            return (
+                              <div className={`flex items-center justify-between p-3 rounded-lg ${isPositive ? 'bg-emerald-50 border border-emerald-200' : isNegative ? 'bg-red-50 border border-red-200' : 'bg-slate-100 border border-slate-200'}`}>
+                                <span className="text-sm font-medium text-slate-600">Estimasi Keuntungan:</span>
+                                <div className="text-right">
+                                  <p className={`font-bold text-lg ${isPositive ? 'text-emerald-600' : isNegative ? 'text-red-600' : 'text-slate-500'}`}>
+                                    {isNegative ? '-' : '+'} Rp {Math.abs(profit).toLocaleString('id-ID')}
+                                  </p>
+                                  {buyPrice > 0 && (
+                                    <p className={`text-xs ${isPositive ? 'text-emerald-500' : isNegative ? 'text-red-500' : 'text-slate-400'}`}>
+                                      ({isNegative ? '' : '+'}{profitPercent}% margin)
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
                     </div>
 
                     {/* Multi Warehouse Stock Inputs */}
