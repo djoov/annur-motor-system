@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Edit, Trash2, Search, Package, UploadCloud, X, QrCode, Store, Warehouse, AlertTriangle, Eye } from "lucide-react"
+import { Plus, Edit, Trash2, Search, Package, UploadCloud, X, QrCode, Store, Warehouse, AlertTriangle, Eye, Download, Tag } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { db } from "@/lib/firebase"
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, limit } from "firebase/firestore"
@@ -85,8 +85,11 @@ export default function ItemsPage() {
     stockDisplay: "",   // Gudang Toko
     stockWarehouse: "", // Gudang Utama
     minStock: "",
-    barcode: ""
+    barcode: "",
+    tags: "" // Comma-separated input
   })
+
+  const [tagsList, setTagsList] = useState<string[]>([])
 
   const [imageBase64, setImageBase64] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -166,8 +169,9 @@ export default function ItemsPage() {
       code: "", name: "", description: "", category: "",
       buyPrice: "", sellPrice: "",
       stockDisplay: "", stockWarehouse: "",
-      minStock: "", barcode: ""
+      minStock: "", barcode: "", tags: ""
     })
+    setTagsList([])
     setImageBase64(null)
     setEditingItem(null)
   }
@@ -228,7 +232,8 @@ export default function ItemsPage() {
 
         // Also save text fields for easier querying if needed
         stockDisplay: qtyDisplay,
-        stockWarehouse: qtyWarehouse
+        stockWarehouse: qtyWarehouse,
+        tags: tagsList // Save tags array
       }
 
       if (editingItem) {
@@ -270,7 +275,9 @@ export default function ItemsPage() {
       stockWarehouse: warehouseStock.toString(),
       minStock: (item.minStock || 0).toString(),
       barcode: item.barcode || '',
+      tags: (item.tags || []).join(', ')
     })
+    setTagsList(item.tags || [])
     setImageBase64(item.imageUrl || null)
     setIsDialogOpen(true)
   }
@@ -453,6 +460,57 @@ export default function ItemsPage() {
                         </div>
                       </div>
 
+                      {/* Tags Input */}
+                      <div className="space-y-2 p-4 bg-slate-50 rounded-lg border">
+                        <div className="flex items-center gap-2">
+                          <Tag className="w-4 h-4 text-slate-600" />
+                          <Label htmlFor="tags">Tags / Label</Label>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {tagsList.map((tag, i) => (
+                            <Badge key={i} variant="secondary" className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-100">
+                              {tag}
+                              <button type="button" className="ml-2 hover:text-red-500" onClick={() => setTagsList(prev => prev.filter((_, idx) => idx !== i))}>
+                                <X className="w-3 h-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <Input
+                            id="tags"
+                            placeholder="Ketik tag lalu Enter..."
+                            value={formData.tags}
+                            onChange={(e) => setFormData(p => ({ ...p, tags: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ',') {
+                                e.preventDefault();
+                                const newTag = formData.tags.trim();
+                                if (newTag && !tagsList.includes(newTag)) {
+                                  setTagsList(prev => [...prev, newTag]);
+                                  setFormData(p => ({ ...p, tags: '' }));
+                                }
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const newTag = formData.tags.trim();
+                              if (newTag && !tagsList.includes(newTag)) {
+                                setTagsList(prev => [...prev, newTag]);
+                                setFormData(p => ({ ...p, tags: '' }));
+                              }
+                            }}
+                          >
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <p className="text-[10px] text-slate-500">Tekan Enter atau klik + untuk menambah tag.</p>
+                      </div>
+
                       <div className="space-y-2">
                         <Label htmlFor="description">Deskripsi</Label>
                         <Textarea id="description" value={formData.description} onChange={(e) => setFormData(p => ({ ...p, description: e.target.value }))} rows={2} placeholder="Keterangan tambahan..." />
@@ -609,8 +667,28 @@ export default function ItemsPage() {
                       )}
                     </div>
                     <div className="p-3 border rounded-lg bg-white text-center">
-                      <QRCodeCanvas value={selectedItem.code || 'ANNUR'} size={100} level="H" className="mx-auto" />
+                      <QRCodeCanvas id={`qr-detail-${selectedItem.id}`} value={selectedItem.code || 'ANNUR'} size={100} level="H" className="mx-auto" />
                       <p className="text-xs text-slate-400 mt-2">{selectedItem.code}</p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2 text-xs w-full"
+                        onClick={() => {
+                          const canvas = document.getElementById(`qr-detail-${selectedItem.id}`) as HTMLCanvasElement;
+                          if (canvas) {
+                            const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
+                            const downloadLink = document.createElement("a");
+                            downloadLink.href = pngUrl;
+                            downloadLink.download = `${selectedItem.code || 'qr'}.png`;
+                            document.body.appendChild(downloadLink);
+                            downloadLink.click();
+                            document.body.removeChild(downloadLink);
+                          }
+                        }}
+                      >
+                        <Download className="w-3 h-3 mr-1" /> Download QR
+                      </Button>
                     </div>
                   </div>
 
@@ -636,6 +714,19 @@ export default function ItemsPage() {
                       <div>
                         <p className="text-xs text-slate-400">Deskripsi</p>
                         <p className="text-sm text-slate-600">{selectedItem.description}</p>
+                      </div>
+                    )}
+
+                    {selectedItem.tags && selectedItem.tags.length > 0 && (
+                      <div>
+                        <p className="text-xs text-slate-400 mb-2">Tags</p>
+                        <div className="flex flex-wrap gap-1">
+                          {selectedItem.tags.map((tag, i) => (
+                            <Badge key={i} variant="secondary" className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                     )}
 
