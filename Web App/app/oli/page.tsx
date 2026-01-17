@@ -1,59 +1,41 @@
 import { PublicNavbar } from "@/components/layout/public-navbar"
 import Image from "next/image"
 import Link from "next/link"
-import { Droplet, Shield, Clock, Wrench, CheckCircle, AlertCircle, Phone } from "lucide-react"
+import { Droplet, Shield, Clock, Wrench, CheckCircle, AlertCircle, Phone, Package } from "lucide-react"
 import { Metadata } from "next"
+import { db } from "@/lib/firebase"
+import { collection, getDocs, query, where, orderBy } from "firebase/firestore"
+import { Item } from "@/types"
 
 export const metadata: Metadata = {
     title: 'Ganti Oli & Cairan - Annur Motor Magelang',
     description: 'Layanan ganti oli dan produk oli motor terlengkap di Magelang. Oli mesin, oli gardan, oli transmisi, dan cairan pendingin berkualitas.',
 }
 
-// Data produk oli
-const oilProducts = [
-    {
-        name: "Federal Matic",
-        type: "Oli Motor Matic",
-        image: "https://images.unsplash.com/photo-1635784063388-1ff609e07d5f?w=400&h=400&fit=crop",
-        desc: "Oli matic premium dengan formula khusus untuk transmisi CVT",
-        price: "Rp 35.000 - 65.000"
-    },
-    {
-        name: "Yamalube",
-        type: "Oli Motor Yamaha",
-        image: "https://images.unsplash.com/photo-1635784063388-1ff609e07d5f?w=400&h=400&fit=crop",
-        desc: "Oli original Yamaha untuk performa maksimal mesin",
-        price: "Rp 40.000 - 85.000"
-    },
-    {
-        name: "AHM Oil",
-        type: "Oli Motor Honda",
-        image: "https://images.unsplash.com/photo-1635784063388-1ff609e07d5f?w=400&h=400&fit=crop",
-        desc: "Oli genuine Honda untuk perlindungan optimal",
-        price: "Rp 38.000 - 80.000"
-    },
-    {
-        name: "Castrol Power 1",
-        type: "Oli Synthetic",
-        image: "https://images.unsplash.com/photo-1635784063388-1ff609e07d5f?w=400&h=400&fit=crop",
-        desc: "Oli full synthetic untuk performa tinggi",
-        price: "Rp 65.000 - 120.000"
-    },
-    {
-        name: "Shell Advance",
-        type: "Oli Premium",
-        image: "https://images.unsplash.com/photo-1635784063388-1ff609e07d5f?w=400&h=400&fit=crop",
-        desc: "Teknologi PurePlus untuk perlindungan mesin",
-        price: "Rp 55.000 - 100.000"
-    },
-    {
-        name: "Oli Gardan",
-        type: "Gear Oil",
-        image: "https://images.unsplash.com/photo-1635784063388-1ff609e07d5f?w=400&h=400&fit=crop",
-        desc: "Oli khusus gardan motor matic & manual",
-        price: "Rp 15.000 - 35.000"
-    },
-]
+// Fetch oil products from database
+async function getOilProducts(): Promise<Item[]> {
+    try {
+        // Query products with category containing 'pelumas' or 'cairan' (case insensitive match)
+        const q = query(
+            collection(db, "items"),
+            orderBy("name")
+        )
+        const snapshot = await getDocs(q)
+
+        // Filter for pelumas/cairan category (case insensitive)
+        const items = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as Item))
+            .filter(item => {
+                const cat = (item.category || '').toLowerCase()
+                return cat.includes('pelumas') || cat.includes('cairan') || cat.includes('oli')
+            })
+
+        return items
+    } catch (error) {
+        console.error("Error fetching oil products:", error)
+        return []
+    }
+}
 
 // Tips perawatan
 const maintenanceTips = [
@@ -89,7 +71,9 @@ const benefits = [
     "Suara mesin lebih halus dan senyap",
 ]
 
-export default function OilChangePage() {
+export default async function OilChangePage() {
+    const oilProducts = await getOilProducts()
+
     return (
         <main className="bg-gradient-to-b from-slate-50 to-white min-h-screen">
             <PublicNavbar />
@@ -161,28 +145,48 @@ export default function OilChangePage() {
                 </div>
             </section>
 
-            {/* Produk Oli */}
+            {/* Produk Oli dari Database */}
             <section className="py-16 px-4 bg-gradient-to-b from-slate-50 to-white">
                 <div className="container mx-auto">
                     <div className="text-center mb-12">
-                        <h2 className="text-3xl font-bold text-slate-800 mb-4">Produk Oli Kami</h2>
+                        <h2 className="text-3xl font-bold text-slate-800 mb-4">Produk Oli & Pelumas Kami</h2>
                         <p className="text-slate-600 max-w-xl mx-auto">
-                            Tersedia berbagai merk oli berkualitas untuk semua jenis motor
+                            Tersedia {oilProducts.length} produk pelumas dan cairan untuk semua jenis motor
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                        {oilProducts.map((product, i) => (
-                            <div key={i} className="bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-lg transition-all p-4 text-center group">
-                                <div className="relative w-full aspect-square rounded-lg overflow-hidden mb-3 bg-gradient-to-b from-amber-50 to-orange-50">
-                                    <Droplet className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 text-amber-400 opacity-50" />
+                    {oilProducts.length === 0 ? (
+                        <div className="text-center py-12 text-slate-400">
+                            <Droplet className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                            <p>Belum ada produk pelumas di database.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                            {oilProducts.map((product) => (
+                                <div key={product.id} className="bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-lg transition-all p-4 text-center group">
+                                    <div className="relative w-full aspect-square rounded-lg overflow-hidden mb-3 bg-gradient-to-b from-amber-50 to-orange-50">
+                                        {product.imageUrl ? (
+                                            <Image
+                                                src={product.imageUrl}
+                                                alt={product.name}
+                                                fill
+                                                className="object-cover"
+                                            />
+                                        ) : (
+                                            <Package className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 text-amber-400 opacity-50" />
+                                        )}
+                                    </div>
+                                    <h3 className="font-bold text-slate-800 text-sm mb-1 group-hover:text-amber-600 transition-colors line-clamp-2">{product.name}</h3>
+                                    {product.code && (
+                                        <p className="text-[10px] text-slate-400 font-mono mb-1">{product.code}</p>
+                                    )}
+                                    <p className="text-sm font-semibold text-amber-600">
+                                        Rp {(product.sellPrice || 0).toLocaleString('id-ID')}
+                                    </p>
                                 </div>
-                                <h3 className="font-bold text-slate-800 text-sm mb-1 group-hover:text-amber-600 transition-colors">{product.name}</h3>
-                                <p className="text-xs text-slate-500 mb-2">{product.type}</p>
-                                <p className="text-xs font-semibold text-amber-600">{product.price}</p>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    )}
 
                     <p className="text-center mt-8 text-sm text-slate-500">
                         * Harga dapat berubah sewaktu-waktu. Hubungi kami untuk informasi terbaru.
