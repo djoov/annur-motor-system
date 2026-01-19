@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Edit, Trash2, Search, Package, UploadCloud, X, QrCode, Store, Warehouse, AlertTriangle, Eye, Download, Tag } from "lucide-react"
+import { Plus, Edit, Trash2, Search, Package, UploadCloud, X, QrCode, Store, Warehouse, AlertTriangle, Eye, Download, Tag, FileSpreadsheet } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { db } from "@/lib/firebase"
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, limit } from "firebase/firestore"
@@ -294,6 +294,57 @@ export default function ItemsPage() {
     setIsDialogOpen(open)
   }
 
+  // Export Items to CSV
+  const handleExportCSV = () => {
+    if (items.length === 0) {
+      toast({ title: "Tidak ada data", description: "Tidak ada barang untuk diekspor.", variant: "destructive" });
+      return;
+    }
+
+    // CSV header
+    const headers = [
+      'Kode', 'Nama', 'Kategori', 'Harga Beli', 'Harga Jual', 'Keuntungan',
+      'Stok Toko', 'Stok Gudang', 'Total Stok', 'Min Stok', 'Barcode', 'Tags', 'Deskripsi'
+    ];
+
+    // CSV rows
+    const rows = items.map(item => {
+      const buyPrice = item.buyPrice || 0;
+      const sellPrice = item.sellPrice || 0;
+      const profit = sellPrice - buyPrice;
+      const totalStock = (item.stockDisplay || 0) + (item.stockWarehouse || 0);
+
+      return [
+        item.code || '',
+        item.name || '',
+        item.category || '',
+        buyPrice,
+        sellPrice,
+        profit,
+        item.stockDisplay || 0,
+        item.stockWarehouse || 0,
+        totalStock,
+        item.minStock || 0,
+        item.barcode || '',
+        (item.tags || []).join('; '),
+        (item.description || '').replace(/[\n\r]+/g, ' ')
+      ].map(val => `"${val}"`).join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `data-barang-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({ title: "Export Berhasil", description: `${items.length} barang berhasil diekspor ke CSV.` });
+  };
+
   return (
     <>
       <MainLayout>
@@ -539,6 +590,9 @@ export default function ItemsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleExportCSV} className="bg-white">
+                    <FileSpreadsheet className="w-4 h-4 mr-2" /> Export CSV
+                  </Button>
                   <Badge variant="outline" className="bg-white px-3 py-1 font-normal text-slate-600">Total: {filteredItems.length} Barang</Badge>
                 </div>
               </div>
