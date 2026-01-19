@@ -123,11 +123,11 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         scrollBehavior: AppScrollBehavior(),
-        // DevicePreview settings
-        useInheritedMediaQuery: true,
-        locale: DevicePreview.locale(context),
-        builder: DevicePreview.appBuilder,
-        home: const SplashScreen(), // Start with Splash Screen
+        // DevicePreview settings - only for web
+        useInheritedMediaQuery: kIsWeb,
+        locale: kIsWeb ? DevicePreview.locale(context) : null,
+        builder: kIsWeb ? DevicePreview.appBuilder : null,
+        home: const SplashScreen(),
       ),
     );
   }

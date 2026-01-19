@@ -7,7 +7,10 @@ import '../items/items_provider.dart';
 import '../items/item_detail_screen.dart';
 
 class ScanScreen extends StatefulWidget {
-  const ScanScreen({Key? key}) : super(key: key);
+  /// If true, just return the scanned code without searching for item
+  final bool returnCodeOnly;
+
+  const ScanScreen({Key? key, this.returnCodeOnly = false}) : super(key: key);
 
   @override
   State<ScanScreen> createState() => _ScanScreenState();
@@ -56,10 +59,16 @@ class _ScanScreenState extends State<ScanScreen> {
               if (barcodes.isNotEmpty && !_isDisposed) {
                 final code = barcodes.first.rawValue;
                 if (code != null) {
-                  // Prevent reuse until handling is done or not found
-                  // _isDisposed = true; // Wait! Only dispose if we pop.
+                  _isDisposed = true;
+                  HapticFeedback.mediumImpact();
 
-                  // Check if item exists
+                  // If returnCodeOnly mode, just return the code
+                  if (widget.returnCodeOnly) {
+                    Navigator.pop(context, code);
+                    return;
+                  }
+
+                  // Otherwise, search for item and navigate
                   final itemsProvider = Provider.of<ItemsProvider>(
                     context,
                     listen: false,
@@ -67,9 +76,6 @@ class _ScanScreenState extends State<ScanScreen> {
                   final item = itemsProvider.findByCode(code);
 
                   if (item != null) {
-                    _isDisposed = true; // Now we can dispose/lock
-                    HapticFeedback.mediumImpact();
-                    // Navigate to Detail
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
@@ -77,9 +83,7 @@ class _ScanScreenState extends State<ScanScreen> {
                       ),
                     );
                   } else {
-                    // Show error but let them keep scanning?
-                    // Maybe pause camera briefly?
-                    // For now just SnackBar
+                    _isDisposed = false; // Allow scanning again
                     ScaffoldMessenger.of(context).clearSnackBars();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(

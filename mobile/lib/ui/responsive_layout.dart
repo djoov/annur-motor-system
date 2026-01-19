@@ -30,6 +30,7 @@ class ResponsiveLayout extends StatelessWidget {
           return desktopBody;
         }
 
+        // Only true phones (<600px) use mobileBody, tablets/desktops use desktopBody
         if (constraints.maxWidth < 900) {
           return mobileBody;
         } else {

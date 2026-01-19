@@ -34,6 +34,7 @@ class PurchaseItem {
 
 class Purchase {
   final String id;
+  final String invoiceNumber; // Added invoice number
   final String supplierId;
   final String supplierName;
   final int total;
@@ -42,6 +43,7 @@ class Purchase {
 
   Purchase({
     required this.id,
+    required this.invoiceNumber,
     required this.supplierId,
     required this.supplierName,
     required this.total,
@@ -53,13 +55,19 @@ class Purchase {
     final data = doc.data() as Map<String, dynamic>;
     return Purchase(
       id: doc.id,
+      invoiceNumber:
+          data['invoiceNumber'] ?? doc.id.substring(0, 8).toUpperCase(),
       supplierId: data['supplierId'] ?? '',
       supplierName: data['supplierName'] ?? 'Unknown',
       total: data['total'] ?? 0,
-      date: (data['date'] as Timestamp).toDate(),
-      items: (data['items'] as List<dynamic>)
-          .map((e) => PurchaseItem.fromMap(e))
-          .toList(),
+      date: data['date'] != null
+          ? (data['date'] as Timestamp).toDate()
+          : DateTime.now(),
+      items:
+          (data['items'] as List<dynamic>?)
+              ?.map((e) => PurchaseItem.fromMap(e))
+              .toList() ??
+          [],
     );
   }
 }

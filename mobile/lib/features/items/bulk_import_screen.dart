@@ -187,7 +187,16 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
               0;
         }
 
-        final code = getVal(0);
+        final rawCode = getVal(0);
+        // Clean up code: remove ="..." wrapper if present (from Excel text format)
+        String code = rawCode;
+        if (code.startsWith('="') && code.endsWith('"')) {
+          code = code.substring(2, code.length - 1);
+        } else if (code.startsWith("='") && code.endsWith("'")) {
+          code = code.substring(2, code.length - 1);
+        }
+        code = code.trim();
+
         if (code.isEmpty) continue; // Skip empty lines
 
         itemsToImport.add({

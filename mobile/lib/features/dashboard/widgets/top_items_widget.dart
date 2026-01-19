@@ -30,7 +30,8 @@ class TopItemsWidget extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           if (items.isEmpty)
-            const Expanded(
+            const SizedBox(
+              height: 80,
               child: Center(
                 child: Text(
                   "Belum ada data penjualan",

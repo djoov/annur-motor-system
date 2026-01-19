@@ -40,7 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Image.asset(
-                        'assets/icon/app_icon.png',
+                        'assets/logo-app.png',
                         width: 300,
                         height: 300,
                         fit: BoxFit.contain,
@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (!isDesktop) ...[
                         Center(
                           child: Image.asset(
-                            'assets/icon/app_icon.png',
+                            'assets/logo-app.png',
                             width: 120,
                             height: 120,
                           ),

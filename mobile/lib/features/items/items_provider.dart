@@ -235,6 +235,37 @@ class ItemsProvider extends ChangeNotifier {
     }
   }
 
+  /// Quick stock adjustment - updates stock by delta value
+  /// [location] can be 'display' or 'warehouse'
+  /// [delta] is the change amount (positive to add, negative to subtract)
+  Future<bool> quickUpdateStock(String id, String location, int delta) async {
+    try {
+      final index = _items.indexWhere((i) => i.id == id);
+      if (index == -1) return false;
+
+      final item = _items[index];
+      int currentStock = location == 'display'
+          ? item.stockDisplay
+          : item.stockWarehouse;
+      int newStock = currentStock + delta;
+      if (newStock < 0) newStock = 0; // Don't allow negative stock
+
+      final fieldName = location == 'display' ? 'qty_display' : 'qty_warehouse';
+
+      await _db.collection('items').doc(id).update({
+        fieldName: newStock,
+        if (location == 'display') 'stock': newStock, // Legacy field
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      await fetchItems(); // Refresh to get updated data
+      return true;
+    } catch (e) {
+      print("Error quick updating stock: $e");
+      return false;
+    }
+  }
+
   Future<bool> deleteItem(String id) async {
     try {
       await _db.collection('items').doc(id).delete();

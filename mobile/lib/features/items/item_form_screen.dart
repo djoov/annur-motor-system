@@ -79,13 +79,25 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
     );
     _imageUrl = widget.item?.imageUrl;
 
+    // Add listeners for real-time margin calculation
+    _sellPriceController.addListener(_onPriceChanged);
+    _buyPriceController.addListener(_onPriceChanged);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<CategoriesProvider>(context, listen: false).fetchCategories();
     });
   }
 
+  void _onPriceChanged() {
+    setState(() {});
+  }
+
   @override
   void dispose() {
+    // Remove listeners
+    _sellPriceController.removeListener(_onPriceChanged);
+    _buyPriceController.removeListener(_onPriceChanged);
+
     _nameController.dispose();
     _codeController.dispose();
     _sellPriceController.dispose();
@@ -199,210 +211,294 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
               const SizedBox(height: 32),
 
               // --- Product Info Section ---
-              const Text(
-                "Informasi Utama",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-
-              CustomInput(
-                label: "Nama Barang",
-                placeholder: "Contoh: Oli Yamalube",
-                controller: _nameController,
-                validator: (v) =>
-                    v == null || v.isEmpty ? "Nama wajib diisi" : null,
-              ),
-
-              const SizedBox(height: 16),
-
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              _buildSectionCard(
+                title: "Informasi Utama",
+                icon: LucideIcons.package,
                 children: [
-                  Expanded(
-                    child: CustomInput(
-                      label: "Kode / SKU",
-                      placeholder: "Scan atau ketik kode",
-                      controller: _codeController,
-                      validator: (v) => v!.isEmpty ? "Kode wajib diisi" : null,
-                      suffixIcon: IconButton(
-                        icon: const Icon(LucideIcons.scanLine, size: 18),
-                        onPressed: () async {
-                          // Dynamic import or assume direct project structure if needed?
-                          // The import for ScanScreen is NOT present in this file header yet.
-                          // I should probably ensure the import is added in a separate tool call if this file was freshly read.
-                          // Wait, I am viewing the file `item_form_screen.dart` right above.
-                          // It does NOT have `ScanScreen` imported.
-                          // I will add the import first, OR handle it here if I can replace header.
-                          // I can't replace header easily here.
-                          // I'll proceed assuming I will add import in next step or use Fully Qualified Name if possible? No.
-                          // I will assume I will add import.
+                  CustomInput(
+                    label: "Nama Barang",
+                    placeholder: "Contoh: Oli Yamalube",
+                    controller: _nameController,
+                    validator: (v) =>
+                        v == null || v.isEmpty ? "Nama wajib diisi" : null,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: CustomInput(
+                          label: "Kode / SKU",
+                          placeholder: "Scan atau ketik kode",
+                          controller: _codeController,
+                          validator: (v) =>
+                              v!.isEmpty ? "Kode wajib diisi" : null,
+                          suffixIcon: IconButton(
+                            icon: const Icon(LucideIcons.scanLine, size: 18),
+                            onPressed: () async {
+                              final code = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const ScanScreen(returnCodeOnly: true),
+                                ),
+                              );
+                              if (code != null && code is String) {
+                                setState(() {
+                                  _codeController.text = code;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Consumer<CategoriesProvider>(
+                    builder: (context, catProvider, child) {
+                      final currentCat = _categoryController.text.isEmpty
+                          ? 'Umum'
+                          : _categoryController.text;
+                      final options = {
+                        'Umum',
+                        ...catProvider.categories.map((e) => e.name),
+                      }.toList();
 
-                          // Code for action:
-                          final code = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const ScanScreen(),
+                      return DropdownButtonFormField<String>(
+                        value: options.contains(currentCat)
+                            ? currentCat
+                            : 'Umum',
+                        decoration: InputDecoration(
+                          labelText: "Kategori",
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(
+                              color: AppColors.input,
                             ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(
+                              color: AppColors.input,
+                            ),
+                          ),
+                        ),
+                        items: options.map((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
                           );
-                          if (code != null && code is String) {
-                            setState(() {
-                              _codeController.text = code;
-                            });
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          if (newValue != null) {
+                            setState(() => _categoryController.text = newValue);
                           }
                         },
-                      ),
-                    ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  CustomInput(
+                    label: "Tags (Pencarian)",
+                    placeholder: "Contoh: oli, yamaha, matic (pisahkan koma)",
+                    controller: _tagsController,
                   ),
                 ],
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
-              CustomInput(
-                label: "Tags (Pencarian)",
-                placeholder: "Contoh: oli, yamaha, matic (pisahkan koma)",
-                controller: _tagsController,
+              // --- Pricing Section ---
+              _buildSectionCard(
+                title: "Informasi Harga",
+                icon: LucideIcons.banknote,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CustomInput(
+                          label: "Harga Jual Umum",
+                          placeholder: "0",
+                          controller: _sellPriceController,
+                          keyboardType: TextInputType.number,
+                          validator: (v) => v!.isEmpty ? "Wajib diisi" : null,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: CustomInput(
+                          label: "Harga Jual Bengkel",
+                          placeholder: "0",
+                          controller: _priceWorkshopController,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (Provider.of<AuthProvider>(context).isAdmin) ...[
+                    const SizedBox(height: 16),
+                    CustomInput(
+                      label: "Harga Beli (Modal)",
+                      placeholder: "0",
+                      controller: _buyPriceController,
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 16),
+                    // Profit Margin Display
+                    Builder(
+                      builder: (context) {
+                        final sellPrice =
+                            int.tryParse(_sellPriceController.text) ?? 0;
+                        final buyPrice =
+                            int.tryParse(_buyPriceController.text) ?? 0;
+                        final profit = sellPrice - buyPrice;
+                        final margin = buyPrice > 0
+                            ? (profit / buyPrice * 100)
+                            : 0.0;
+                        final isProfit = profit > 0;
+                        final isLoss = profit < 0;
+
+                        return Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isProfit
+                                ? Colors.green.withOpacity(0.1)
+                                : (isLoss
+                                      ? Colors.red.withOpacity(0.1)
+                                      : Colors.grey.withOpacity(0.1)),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isProfit
+                                  ? Colors.green.withOpacity(0.3)
+                                  : (isLoss
+                                        ? Colors.red.withOpacity(0.3)
+                                        : Colors.grey.withOpacity(0.3)),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isProfit
+                                    ? LucideIcons.trendingUp
+                                    : (isLoss
+                                          ? LucideIcons.trendingDown
+                                          : LucideIcons.minus),
+                                color: isProfit
+                                    ? Colors.green
+                                    : (isLoss ? Colors.red : Colors.grey),
+                                size: 24,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Estimasi Margin",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      buyPrice > 0
+                                          ? "Rp ${_formatNumber(profit)} (${margin.toStringAsFixed(1)}%)"
+                                          : "Masukkan harga beli",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: isProfit
+                                            ? Colors.green[700]
+                                            : (isLoss
+                                                  ? Colors.red[700]
+                                                  : Colors.grey[600]),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ],
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
-              Consumer<CategoriesProvider>(
-                builder: (context, catProvider, child) {
-                  // Simplified Category Dropdown
-                  final currentCat = _categoryController.text.isEmpty
-                      ? 'Umum'
-                      : _categoryController.text;
-                  final options = {
-                    'Umum',
-                    ...catProvider.categories.map((e) => e.name),
-                  }.toList();
+              // --- Stock & Location Section ---
+              _buildSectionCard(
+                title: "Stok & Lokasi",
+                icon: LucideIcons.warehouse,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CustomInput(
+                          label: "Stok Toko (Display)",
+                          placeholder: "0",
+                          controller: _stockDisplayController,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: CustomInput(
+                          label: "Stok Gudang",
+                          placeholder: "0",
+                          controller: _stockWarehouseController,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CustomInput(
+                          label: "Lokasi Rak (Toko)",
+                          placeholder: "Contoh: A1-05",
+                          controller: _locationDisplayController,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: CustomInput(
+                          label: "Lokasi Rak (Gudang)",
+                          placeholder: "Contoh: G-B3",
+                          controller: _locationWarehouseController,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
 
-                  return DropdownButtonFormField<String>(
-                    value: options.contains(currentCat) ? currentCat : 'Umum',
-                    decoration: InputDecoration(
-                      labelText: "Kategori",
-                      filled: true,
-                      fillColor: AppColors.surface,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.input),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.input),
-                      ),
-                    ),
-                    items: options.map((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }).toList(),
-                    onChanged: (String? newValue) {
-                      if (newValue != null) {
-                        setState(() => _categoryController.text = newValue);
-                      }
-                    },
-                  );
-                },
+              const SizedBox(height: 20),
+
+              // --- Description Section ---
+              _buildSectionCard(
+                title: "Deskripsi Produk",
+                icon: LucideIcons.fileText,
+                children: [
+                  CustomInput(
+                    label: "Deskripsi",
+                    placeholder: "Tambahkan detail produk...",
+                    controller: _descriptionController,
+                    maxLines: 4,
+                    keyboardType: TextInputType.multiline,
+                  ),
+                ],
               ),
 
               const SizedBox(height: 32),
-
-              // --- Pricing & Stock Section ---
-              const Text(
-                "Harga & Stok (Dual Location)",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: CustomInput(
-                      label: "Harga Jual Umum",
-                      placeholder: "0",
-                      controller: _sellPriceController,
-                      keyboardType: TextInputType.number,
-                      validator: (v) => v!.isEmpty ? "Wajib diisi" : null,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: CustomInput(
-                      label: "Harga Jual Bengkel",
-                      placeholder: "0",
-                      controller: _priceWorkshopController,
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // Only Admin can see Buy Price
-              if (Provider.of<AuthProvider>(context).isAdmin) ...[
-                CustomInput(
-                  label: "Harga Beli (Modal)",
-                  placeholder: "0",
-                  controller: _buyPriceController,
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              Row(
-                children: [
-                  Expanded(
-                    child: CustomInput(
-                      label: "Stok Toko (Display)",
-                      placeholder: "0",
-                      controller: _stockDisplayController,
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: CustomInput(
-                      label: "Stok Gudang",
-                      placeholder: "0",
-                      controller: _stockWarehouseController,
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: CustomInput(
-                      label: "Lokasi Rak (Toko)",
-                      placeholder: "Contoh: A1-05",
-                      controller: _locationDisplayController,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: CustomInput(
-                      label: "Lokasi Rak (Gudang)",
-                      placeholder: "Contoh: G-B3",
-                      controller: _locationWarehouseController,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              CustomInput(
-                label: "Deskripsi",
-                placeholder: "Tambahkan detail produk...",
-                controller: _descriptionController,
-                maxLines: 3,
-                keyboardType: TextInputType.multiline,
-              ),
-
-              const SizedBox(height: 48),
 
               // --- Actions ---
               CustomButton(
@@ -606,5 +702,62 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
       ).showSnackBar(const SnackBar(content: Text("Gagal upload gambar")));
       return null;
     }
+  }
+
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.foreground,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  String _formatNumber(int number) {
+    return number.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
+    );
   }
 }

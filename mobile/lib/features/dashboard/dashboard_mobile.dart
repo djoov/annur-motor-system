@@ -15,6 +15,8 @@ import 'dashboard_provider.dart';
 import 'package:intl/intl.dart';
 import '../../features/auth/auth_provider.dart';
 import 'widgets/weekly_revenue_chart.dart';
+import 'widgets/top_items_widget.dart';
+import 'widgets/low_stock_widget.dart';
 
 class DashboardMobile extends StatelessWidget {
   const DashboardMobile({Key? key}) : super(key: key);
@@ -230,140 +232,178 @@ class DashboardMobile extends StatelessWidget {
               ),
             ),
 
-            // 2. Weekly Revenue Chart
-            if (isAdmin)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
+            // 2. Content Section - Different order for phone vs tablet
+            Builder(
+              builder: (context) {
+                final screenWidth = MediaQuery.of(context).size.width;
+                final isTablet = screenWidth >= 600;
+
+                // Build Quick Access widget
+                Widget quickAccess = Padding(
+                  padding: EdgeInsets.fromLTRB(24, 16, 24, isTablet ? 16 : 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        "Tren Pendapatan (7 Hari)",
+                        "Akses Cepat",
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: AppColors.primary,
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      dashboardProvider.isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : WeeklyRevenueChart(
-                              weeklyData: dashboardProvider.weeklyRevenue,
-                            ),
-                    ],
-                  ),
-                ),
-              ),
-
-            // 3. Quick Actions
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                24,
-                16,
-                24,
-                24,
-              ), // Reduced top to 16
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Akses Cepat",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  GridView.count(
-                    padding: EdgeInsets.zero,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 1.0, // Square cards to be safe
-                    children: [
-                      _buildMenuCard(
-                        context,
-                        "Kasir (POS)",
-                        "Buat Transaksi",
-                        LucideIcons.shoppingCart,
-                        const Color(0xFF3B82F6),
-                        () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const PosScreen()),
-                        ),
-                      ),
-                      _buildMenuCard(
-                        context,
-                        "Kelola Produk",
-                        "Data Barang",
-                        LucideIcons.package,
-                        const Color(0xFFF97316),
-                        () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ItemsListScreen(),
-                          ),
-                        ),
-                      ),
-                      _buildMenuCard(
-                        context,
-                        "Cek Harga", // Shortened label
-                        "Scan QR Code",
-                        LucideIcons.scanLine,
-                        const Color(0xFF8B5CF6),
-                        () async {
-                          final code = await Navigator.push(
+                      const SizedBox(height: 8),
+                      GridView.count(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: isTablet ? 4 : 2,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                        childAspectRatio: isTablet ? 1.2 : 1.0,
+                        children: [
+                          _buildMenuCard(
                             context,
-                            MaterialPageRoute(
-                              builder: (_) => const ScanScreen(),
-                            ),
-                          );
-
-                          if (code != null && context.mounted) {
-                            Navigator.push(
+                            "Kasir (POS)",
+                            "Buat Transaksi",
+                            LucideIcons.shoppingCart,
+                            const Color(0xFF3B82F6),
+                            () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                    ItemsListScreen(initialQuery: code),
+                                builder: (_) => const PosScreen(),
                               ),
-                            );
-                          }
-                        },
-                      ),
-                      _buildMenuCard(
-                        context,
-                        "Laporan",
-                        "Riwayat & Omset",
-                        LucideIcons.fileBarChart,
-                        const Color(0xFF10B981),
-                        () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const HistoryScreen(),
+                            ),
                           ),
-                        ),
+                          _buildMenuCard(
+                            context,
+                            "Kelola Produk",
+                            "Data Barang",
+                            LucideIcons.package,
+                            const Color(0xFFF97316),
+                            () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ItemsListScreen(),
+                              ),
+                            ),
+                          ),
+                          _buildMenuCard(
+                            context,
+                            "Cek Harga",
+                            "Scan QR Code",
+                            LucideIcons.scanLine,
+                            const Color(0xFF8B5CF6),
+                            () async {
+                              final code = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ScanScreen(),
+                                ),
+                              );
+
+                              if (code != null && context.mounted) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        ItemsListScreen(initialQuery: code),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                          _buildMenuCard(
+                            context,
+                            "Laporan",
+                            "Riwayat & Omset",
+                            LucideIcons.fileBarChart,
+                            const Color(0xFF10B981),
+                            () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const HistoryScreen(),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                );
+
+                // Build BI Section widget
+                Widget biSection = isTablet && isAdmin
+                    ? Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: TopItemsWidget(
+                                items: dashboardProvider.topItems,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: LowStockWidget(
+                                items: dashboardProvider.lowStockItems,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : (isAdmin
+                          ? Padding(
+                              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                              child: Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      "Tren Pendapatan (7 Hari)",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    dashboardProvider.isLoading
+                                        ? const Center(
+                                            child: CircularProgressIndicator(),
+                                          )
+                                        : WeeklyRevenueChart(
+                                            weeklyData:
+                                                dashboardProvider.weeklyRevenue,
+                                          ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink());
+
+                // Return different order based on device
+                if (isTablet) {
+                  // Tablet: Quick Access first, then BI
+                  return Column(children: [quickAccess, biSection]);
+                } else {
+                  // Phone: BI first, then Quick Access
+                  return Column(children: [biSection, quickAccess]);
+                }
+              },
             ),
           ],
         ),

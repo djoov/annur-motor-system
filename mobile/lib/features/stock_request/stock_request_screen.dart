@@ -54,6 +54,24 @@ class _StockRequestScreenState extends State<StockRequestScreen> {
           .toList();
     }
 
+    // Sort: Low stock first (1-5), then out of stock (0), then by category, then by name
+    lowStockItems.sort((a, b) {
+      // First: items with low stock (1-5) come before out of stock (0)
+      final aIsLow = a.stockDisplay > 0 && a.stockDisplay <= 5;
+      final bIsLow = b.stockDisplay > 0 && b.stockDisplay <= 5;
+      if (aIsLow && !bIsLow) return -1;
+      if (!aIsLow && bIsLow) return 1;
+
+      // Second: sort by category
+      final categoryCompare = (a.category ?? 'Umum').compareTo(
+        b.category ?? 'Umum',
+      );
+      if (categoryCompare != 0) return categoryCompare;
+
+      // Third: sort by name
+      return a.name.compareTo(b.name);
+    });
+
     return DesktopScaffold(
       activeRoute: '/stock-request',
       title: "Permintaan Stok",

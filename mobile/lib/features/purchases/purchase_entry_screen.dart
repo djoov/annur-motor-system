@@ -30,6 +30,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
   String _selectedItemName = '';
   final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _buyPriceController = TextEditingController();
+  final TextEditingController _invoiceController = TextEditingController();
 
   @override
   void initState() {
@@ -38,6 +39,14 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
       Provider.of<SuppliersProvider>(context, listen: false).fetchSuppliers();
       Provider.of<ItemsProvider>(context, listen: false).fetchItems();
     });
+  }
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    _buyPriceController.dispose();
+    _invoiceController.dispose();
+    super.dispose();
   }
 
   void _addItem() {
@@ -96,6 +105,18 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // 0. Invoice Number
+                  const Text(
+                    "Nomor Faktur (Opsional)",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  CustomInput(
+                    placeholder: "Contoh: INV-001",
+                    controller: _invoiceController,
+                  ),
+                  const SizedBox(height: 16),
+
                   // 1. Select Supplier
                   const Text(
                     "Pilih Supplier",
@@ -284,12 +305,14 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
                     onPressed: _cart.isEmpty || _selectedSupplierId == null
                         ? null
                         : () async {
-                            final success = await purchaseProvider
-                                .createPurchase(
-                                  _selectedSupplierId!,
-                                  _selectedSupplierName,
-                                  _cart,
-                                );
+                            final success = await purchaseProvider.createPurchase(
+                              _invoiceController.text.isEmpty
+                                  ? "AUTO-${DateTime.now().millisecondsSinceEpoch}"
+                                  : _invoiceController.text,
+                              _selectedSupplierId!,
+                              _selectedSupplierName,
+                              _cart,
+                            );
                             if (success && context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(

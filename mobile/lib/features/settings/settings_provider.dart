@@ -129,11 +129,30 @@ class SettingsProvider with ChangeNotifier {
     _receiptFooter = footer;
     _adminName = adminName;
 
+    // Save to SharedPreferences (local cache)
     await prefs.setString('shop_name', name);
     await prefs.setString('shop_address', address);
     await prefs.setString('shop_phone', phone);
     await prefs.setString('receipt_footer', footer);
     await prefs.setString('admin_name', adminName);
+
+    // Save to Firestore (persistent across reinstalls)
+    try {
+      await FirebaseFirestore.instance
+          .collection('settings')
+          .doc('shop_profile')
+          .set({
+            'shop_name': name,
+            'shop_address': address,
+            'shop_phone': phone,
+            'receipt_footer': footer,
+            'admin_name': adminName,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+    } catch (e) {
+      print('Error saving profile to Firestore: $e');
+    }
+
     notifyListeners();
   }
 
@@ -290,11 +309,40 @@ class SettingsProvider with ChangeNotifier {
   // Load Settings and Known Devices
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // First try to load from SharedPreferences (fast, local)
     _shopName = prefs.getString('shop_name') ?? "Annur Motor";
     _shopAddress = prefs.getString('shop_address') ?? "Jl. Contoh No. 123";
     _shopPhone = prefs.getString('shop_phone') ?? "0812-3456-7890";
     _receiptFooter = prefs.getString('receipt_footer') ?? "Terima Kasih";
     _adminName = prefs.getString('admin_name') ?? "Admin";
+
+    // Try to load from Firestore (for cross-device sync or after reinstall)
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('settings')
+          .doc('shop_profile')
+          .get();
+
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        // Update local values if Firestore has newer data
+        _shopName = data['shop_name'] ?? _shopName;
+        _shopAddress = data['shop_address'] ?? _shopAddress;
+        _shopPhone = data['shop_phone'] ?? _shopPhone;
+        _receiptFooter = data['receipt_footer'] ?? _receiptFooter;
+        _adminName = data['admin_name'] ?? _adminName;
+
+        // Also update SharedPreferences for faster future loads
+        await prefs.setString('shop_name', _shopName);
+        await prefs.setString('shop_address', _shopAddress);
+        await prefs.setString('shop_phone', _shopPhone);
+        await prefs.setString('receipt_footer', _receiptFooter);
+        await prefs.setString('admin_name', _adminName);
+      }
+    } catch (e) {
+      print('Error loading profile from Firestore: $e');
+    }
 
     // Load Custom Logo
     final logoPath = prefs.getString('receipt_logo_path');

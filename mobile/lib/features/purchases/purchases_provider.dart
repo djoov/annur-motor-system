@@ -33,6 +33,7 @@ class PurchasesProvider extends ChangeNotifier {
   }
 
   Future<bool> createPurchase(
+    String invoiceNumber,
     String supplierId,
     String supplierName,
     List<PurchaseItem> items,
@@ -48,6 +49,7 @@ class PurchasesProvider extends ChangeNotifier {
 
       // 1. Create Purchase Transaction
       await _db.collection('purchases').add({
+        'invoiceNumber': invoiceNumber,
         'supplierId': supplierId,
         'supplierName': supplierName,
         'total': total,
@@ -76,6 +78,36 @@ class PurchasesProvider extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Import purchase from CSV
+  Future<bool> importPurchase({
+    required String invoiceNumber,
+    required String supplierName,
+    required List<PurchaseItem> items,
+  }) async {
+    try {
+      int total = 0;
+      for (var item in items) {
+        total += item.buyPrice * item.quantity;
+      }
+
+      // Create Purchase record with invoice number
+      await _db.collection('purchases').add({
+        'invoiceNumber': invoiceNumber,
+        'supplierId': '',
+        'supplierName': supplierName,
+        'total': total,
+        'date': FieldValue.serverTimestamp(),
+        'items': items.map((e) => e.toMap()).toList(),
+        'importedAt': FieldValue.serverTimestamp(),
+      });
+
+      return true;
+    } catch (e) {
+      print("Error importing purchase: $e");
+      return false;
     }
   }
 }

@@ -63,8 +63,10 @@ class _ItemsListScreenState extends State<ItemsListScreen> {
       }
 
       final csvData = items.map((item) {
+        // Prefix code with = to force Excel to treat as text (preserves leading zeros)
+        final formattedCode = '="${item.code}"';
         return [
-          item.code,
+          formattedCode,
           item.name,
           item.buyPrice,
           item.sellPrice,
@@ -181,14 +183,23 @@ class _ItemsListScreenState extends State<ItemsListScreen> {
 
         return Consumer<ItemsProvider>(
           builder: (context, provider, child) {
-            final filteredItems = provider.items.where((item) {
-              final matchesTag = item.tags.any(
-                (tag) => tag.toLowerCase().contains(_searchQuery),
-              );
-              return item.name.toLowerCase().contains(_searchQuery) ||
-                  item.code.toLowerCase().contains(_searchQuery) ||
-                  matchesTag;
-            }).toList();
+            final filteredItems =
+                provider.items.where((item) {
+                    final matchesTag = item.tags.any(
+                      (tag) => tag.toLowerCase().contains(_searchQuery),
+                    );
+                    return item.name.toLowerCase().contains(_searchQuery) ||
+                        item.code.toLowerCase().contains(_searchQuery) ||
+                        matchesTag;
+                  }).toList()
+                  // Sort by category first, then by name within category
+                  ..sort((a, b) {
+                    final categoryCompare = (a.category ?? '').compareTo(
+                      b.category ?? '',
+                    );
+                    if (categoryCompare != 0) return categoryCompare;
+                    return a.name.compareTo(b.name);
+                  });
 
             return CustomScrollView(
               slivers: [
@@ -239,6 +250,23 @@ class _ItemsListScreenState extends State<ItemsListScreen> {
                         placeholder: "Cari Nama / Kode Barang...",
                         controller: _searchController,
                         suffixIcon: const Icon(LucideIcons.search, size: 20),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Total Items Count
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      "${filteredItems.length} barang${_searchQuery.isNotEmpty ? ' ditemukan' : ''}",
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.mutedForeground,
                       ),
                     ),
                   ),
@@ -396,6 +424,27 @@ class _ItemsListScreenState extends State<ItemsListScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (item.category != null && item.category!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          item.category!,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,

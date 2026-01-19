@@ -43,7 +43,7 @@ class _SplashScreenState extends State<SplashScreen> {
             const Spacer(),
             // Logo
             Image.asset(
-              'assets/icon/app_icon.png',
+              'assets/logo-app.png',
               width: 300, // Even Bigger logo
               height: 300,
               fit: BoxFit.contain,
