@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../../ui/app_drawer.dart';
+
 import '../../ui/desktop_scaffold.dart';
 import 'suppliers_provider.dart';
 import 'supplier_form_screen.dart';
@@ -70,7 +70,6 @@ class _SuppliersListScreenState extends State<SuppliersListScreen> {
 
     // Mobile Layout
     return Scaffold(
-      drawer: const AppDrawer(),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(

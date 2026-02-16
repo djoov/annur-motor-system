@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme.dart';
 import '../items/items_provider.dart';
-import '../../ui/app_drawer.dart';
+
 import '../../ui/desktop_scaffold.dart';
 
 class LowStockReportScreen extends StatefulWidget {
@@ -64,7 +64,6 @@ class _LowStockReportScreenState extends State<LowStockReportScreen> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        drawer: const AppDrawer(),
         backgroundColor: AppColors.background,
         appBar: AppBar(
           title: const Text("Laporan Stok Menipis"),

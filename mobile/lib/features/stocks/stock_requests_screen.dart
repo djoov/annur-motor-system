@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme.dart';
-import '../../ui/app_drawer.dart';
+
 import 'stock_request_provider.dart';
 import '../auth/auth_provider.dart';
 import 'package:intl/intl.dart';
@@ -124,7 +124,6 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
         title: const Text("Permintaan Stok Restock"),
         elevation: 0,
       ),
-      drawer: const AppDrawer(), // Or access from Master Data
       backgroundColor: AppColors.background,
       body: requests.isEmpty
           ? const Center(

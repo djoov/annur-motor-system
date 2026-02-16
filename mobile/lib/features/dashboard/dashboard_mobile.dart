@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
-import '../../ui/app_drawer.dart';
+
 import '../pos/pos_screen.dart';
 import '../history/history_screen.dart';
 import '../scan/scan_screen.dart';
@@ -99,7 +99,6 @@ class DashboardMobile extends StatelessWidget {
           ),
         ],
       ),
-      drawer: const AppDrawer(),
       extendBodyBehindAppBar: true,
       body: SingleChildScrollView(
         child: Column(
@@ -400,8 +399,8 @@ class DashboardMobile extends StatelessWidget {
                   // Tablet: Quick Access first, then BI
                   return Column(children: [quickAccess, biSection]);
                 } else {
-                  // Phone: BI first, then Quick Access
-                  return Column(children: [biSection, quickAccess]);
+                  // Phone: Quick Access first, then BI (Revenue Trend)
+                  return Column(children: [quickAccess, biSection]);
                 }
               },
             ),

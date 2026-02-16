@@ -8,7 +8,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../ui/app_drawer.dart';
+
 import '../../ui/desktop_scaffold.dart';
 import 'purchases_provider.dart';
 import 'purchase_entry_screen.dart';
@@ -238,7 +238,6 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
           ),
         ],
       ),
-      drawer: const AppDrawer(),
       body: Consumer<PurchasesProvider>(
         builder: (context, provider, child) {
           return _buildListBody(context, provider, dateFormat, currencyFormat);

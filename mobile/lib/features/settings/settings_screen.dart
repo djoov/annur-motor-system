@@ -8,7 +8,6 @@ import '../../ui/button.dart';
 import 'settings_provider.dart';
 import '../auth/auth_provider.dart';
 
-import '../../ui/app_drawer.dart';
 import '../../ui/desktop_scaffold.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -70,7 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return DesktopScaffold(
         activeRoute: '/settings',
         body: DefaultTabController(
-          length: 2,
+          length: 3,
           child: Scaffold(
             backgroundColor:
                 Colors.transparent, // Let DesktopScaffold bg show? Or white.
@@ -89,11 +88,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 tabs: [
                   Tab(text: "Printer", icon: Icon(LucideIcons.printer)),
                   Tab(text: "Struk", icon: Icon(LucideIcons.receipt)),
+                  Tab(text: "Akun", icon: Icon(LucideIcons.user)),
                 ],
               ),
             ),
             body: TabBarView(
-              children: [_buildPrinterTab(), _buildReceiptTab()],
+              children: [
+                _buildPrinterTab(),
+                _buildReceiptTab(),
+                _buildAccountTab(),
+              ],
             ),
           ),
         ),
@@ -101,10 +105,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         backgroundColor: AppColors.background,
-        drawer: const AppDrawer(),
         appBar: AppBar(
           title: const Text(
             "Pengaturan",
@@ -120,10 +123,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             tabs: [
               Tab(text: "Printer", icon: Icon(LucideIcons.printer)),
               Tab(text: "Struk", icon: Icon(LucideIcons.receipt)),
+              Tab(text: "Akun", icon: Icon(LucideIcons.user)),
             ],
           ),
         ),
-        body: TabBarView(children: [_buildPrinterTab(), _buildReceiptTab()]),
+        body: TabBarView(
+          children: [
+            _buildPrinterTab(),
+            _buildReceiptTab(),
+            _buildAccountTab(),
+          ],
+        ),
       ),
     );
   }
@@ -132,7 +142,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Consumer<SettingsProvider>(
       builder: (context, provider, child) {
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(
+            24,
+            24,
+            24,
+            100,
+          ), // Added bottom padding
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -335,7 +350,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _shopNameController.text = provider.shopName;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(
+        24,
+        24,
+        24,
+        100,
+      ), // Added bottom padding
       child: Form(
         key: _formKey,
         child: Column(
@@ -451,6 +471,121 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAccountTab() {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        final user = authProvider.userModel;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            24,
+            24,
+            24,
+            100,
+          ), // Added bottom padding
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildSectionTitle("Informasi Akun"),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.input),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundColor: AppColors.primary.withOpacity(0.1),
+                      child: Text(
+                        (user?.name ?? "U").substring(0, 1).toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user?.name ?? "Pengguna",
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            user?.email ?? "-",
+                            style: const TextStyle(
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              (user?.role ?? "Staff").toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+              CustomButton(
+                text: "Keluar Aplikasi",
+                icon: LucideIcons.logOut,
+                isDestructive: true,
+                onPressed: () async {
+                  await authProvider.logout();
+                  if (context.mounted) {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  }
+                },
+              ),
+              const SizedBox(height: 32),
+              _buildSectionTitle("Zona Bahaya"),
+              const SizedBox(height: 16),
+              Consumer<SettingsProvider>(
+                builder: (context, settingsProvider, child) {
+                  return CustomButton(
+                    text: "Reset Data Aplikasi",
+                    icon: LucideIcons.trash2,
+                    isDestructive: true,
+                    isOutline: true,
+                    onPressed: () =>
+                        _showResetConfirmation(context, settingsProvider),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

@@ -56,7 +56,7 @@ class WeeklyRevenueChart extends StatelessWidget {
     }
 
     return AspectRatio(
-      aspectRatio: 1.7,
+      aspectRatio: 2.5,
       child: BarChart(
         BarChartData(
           alignment: BarChartAlignment.spaceAround,

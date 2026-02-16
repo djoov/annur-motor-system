@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 import 'models/pos_models.dart';
 
 class PosProvider extends ChangeNotifier {
@@ -11,6 +12,8 @@ class PosProvider extends ChangeNotifier {
   final List<CartItem> _cart = [];
   String _selectedCustomerId = 'umum';
   bool _isLoading = false;
+  StreamSubscription<QuerySnapshot>? _itemsSubscription;
+  StreamSubscription<QuerySnapshot>? _customersSubscription;
 
   // Payment State
   bool _isDebt = false;
@@ -48,33 +51,63 @@ class PosProvider extends ChangeNotifier {
       _cart.fold(0, (sum, item) => sum + (item.sellPrice * item.quantity));
   int get totalItems => _cart.fold(0, (sum, item) => sum + item.quantity);
 
-  // PosProvider constructor removed to prevent immediate notifyListeners
-  // Call fetchData() from UI instead.
-
-  Future<void> fetchData() async {
+  /// Start listening to real-time updates
+  void startListening() {
     _isLoading = true;
     notifyListeners();
-    try {
-      final itemsSnapshot = await _db.collection('items').get();
-      _allItems = itemsSnapshot.docs
-          .map((doc) => Item.fromFirestore(doc))
-          .toList();
-      _filteredItems = List.from(_allItems);
 
-      // Extract unique categories
-      final catSet = _allItems.map((e) => e.category ?? 'Umum').toSet();
-      _categories = ["Semua", ...catSet.toList()..sort()];
+    // Listen to items
+    _itemsSubscription?.cancel();
+    _itemsSubscription = _db
+        .collection('items')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            _allItems = snapshot.docs
+                .map((doc) => Item.fromFirestore(doc))
+                .toList();
+            _applyFilters();
 
-      final customersSnapshot = await _db.collection('customers').get();
-      _customers = customersSnapshot.docs
+            // Extract unique categories
+            final catSet = _allItems.map((e) => e.category ?? 'Umum').toSet();
+            _categories = ["Semua", ...catSet.toList()..sort()];
+
+            _isLoading = false;
+            notifyListeners();
+          },
+          onError: (e) {
+            print("Error listening to items: $e");
+            _isLoading = false;
+            notifyListeners();
+          },
+        );
+
+    // Listen to customers
+    _customersSubscription?.cancel();
+    _customersSubscription = _db.collection('customers').snapshots().listen((
+      snapshot,
+    ) {
+      _customers = snapshot.docs
           .map((doc) => Customer.fromFirestore(doc))
           .toList();
-    } catch (e) {
-      print("Error fetching data: $e");
-    } finally {
-      _isLoading = false;
       notifyListeners();
+    }, onError: (e) => print("Error listening to customers: $e"));
+  }
+
+  /// Stop listening (call on dispose)
+  void stopListening() {
+    _itemsSubscription?.cancel();
+    _customersSubscription?.cancel();
+    _itemsSubscription = null;
+    _customersSubscription = null;
+  }
+
+  /// Legacy fetch for backward compatibility
+  Future<void> fetchData() async {
+    if (_itemsSubscription == null) {
+      startListening();
     }
+    await Future.delayed(const Duration(milliseconds: 500));
   }
 
   List<String> _categories = ["Semua"];

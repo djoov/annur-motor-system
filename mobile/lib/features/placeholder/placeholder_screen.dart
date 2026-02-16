@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../ui/app_drawer.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   final String title;
@@ -10,7 +9,6 @@ class PlaceholderScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
-      drawer: const AppDrawer(),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

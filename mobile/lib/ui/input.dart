@@ -10,6 +10,7 @@ class CustomInput extends StatelessWidget {
   final Function(String)? onChanged;
   final String? Function(String?)? validator;
   final Widget? suffixIcon;
+  final Widget? prefixIcon; // Added prefixIcon
   final FocusNode? focusNode; // Restored
   final int maxLines; // Added maxLines
 
@@ -23,6 +24,7 @@ class CustomInput extends StatelessWidget {
     this.onChanged,
     this.validator,
     this.suffixIcon,
+    this.prefixIcon, // Added here
     this.focusNode,
     this.maxLines = 1, // Default to 1
   });
@@ -46,7 +48,8 @@ class CustomInput extends StatelessWidget {
           labelStyle: const TextStyle(color: AppColors.mutedForeground),
           hintText: placeholder,
           hintStyle: const TextStyle(color: AppColors.mutedForeground),
-          // Suffix Icon added here
+          // Icons
+          prefixIcon: prefixIcon,
           suffixIcon: suffixIcon,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,

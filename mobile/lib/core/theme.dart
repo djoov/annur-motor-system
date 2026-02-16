@@ -8,8 +8,12 @@ class AppColors {
   static const Color background = Color(0xFFF8FAFC); // Slate-50
   static const Color surface = Colors.white;
 
-  static const Color primary = Color(0xFF0F172A); // Slate-900
+  static const Color primary = Color(0xFF003D79); // Mandiri Blue Dark
   static const Color primaryForeground = Colors.white;
+
+  // Mandiri Palette
+  static const Color mandiriBlueDark = Color(0xFF003D79);
+  static const Color mandiriBlueLight = Color(0xFF00A3E8);
 
   static const Color secondary = Color(0xFFE2E8F0); // Slate-200
   static const Color secondaryForeground = Color(0xFF1E293B); // Slate-800

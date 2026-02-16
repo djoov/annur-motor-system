@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 import '../pos/models/pos_models.dart';
 import '../../core/services/notification_service.dart';
 import 'exceptions.dart';
@@ -9,6 +10,7 @@ class ItemsProvider extends ChangeNotifier {
 
   List<Item> _items = [];
   bool _isLoading = false;
+  StreamSubscription<QuerySnapshot>? _itemsSubscription;
 
   List<Item> get items => _items;
   bool get isLoading => _isLoading;
@@ -30,20 +32,46 @@ class ItemsProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> fetchItems() async {
+  /// Start listening to real-time updates from Firestore
+  void startListening() {
     _isLoading = true;
     notifyListeners();
 
-    try {
-      final snapshot = await _db.collection('items').orderBy('name').get();
-      _items = snapshot.docs.map((doc) => Item.fromFirestore(doc)).toList();
-      _checkLowStock();
-    } catch (e) {
-      print("Error fetching items: $e");
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+    _itemsSubscription?.cancel(); // Cancel any existing subscription
+    _itemsSubscription = _db
+        .collection('items')
+        .orderBy('name')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            _items = snapshot.docs
+                .map((doc) => Item.fromFirestore(doc))
+                .toList();
+            _isLoading = false;
+            _checkLowStock();
+            notifyListeners();
+          },
+          onError: (e) {
+            print("Error listening to items: $e");
+            _isLoading = false;
+            notifyListeners();
+          },
+        );
+  }
+
+  /// Stop listening (call on dispose)
+  void stopListening() {
+    _itemsSubscription?.cancel();
+    _itemsSubscription = null;
+  }
+
+  /// Legacy fetch for backward compatibility (now uses startListening internally)
+  Future<void> fetchItems() async {
+    if (_itemsSubscription == null) {
+      startListening();
     }
+    // Wait a bit for initial data
+    await Future.delayed(const Duration(milliseconds: 500));
   }
 
   void _checkLowStock() {
@@ -193,7 +221,7 @@ class ItemsProvider extends ChangeNotifier {
         'price_workshop': priceWorkshop,
         'tags': tags,
         'category': category,
-        if (imageUrl != null) 'imageUrl': imageUrl, // Only update if provided
+        'imageUrl': imageUrl ?? '', // Always update, empty string if deleted
         'location_display': locationDisplay,
         'location_warehouse': locationWarehouse,
         'description': description,

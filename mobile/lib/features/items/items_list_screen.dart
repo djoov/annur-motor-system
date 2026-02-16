@@ -3,7 +3,7 @@ import '../../ui/desktop_scaffold.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
-import '../../ui/app_drawer.dart';
+
 import '../../core/theme.dart';
 import '../../ui/input.dart';
 import 'items_provider.dart';
@@ -15,8 +15,13 @@ import '../auth/auth_provider.dart';
 
 class ItemsListScreen extends StatefulWidget {
   final String? initialQuery;
+  final bool showBackButton;
 
-  const ItemsListScreen({Key? key, this.initialQuery}) : super(key: key);
+  const ItemsListScreen({
+    Key? key,
+    this.initialQuery,
+    this.showBackButton = true,
+  }) : super(key: key);
 
   @override
   State<ItemsListScreen> createState() => _ItemsListScreenState();
@@ -161,7 +166,7 @@ class _ItemsListScreenState extends State<ItemsListScreen> {
 
     // Mobile Layout
     return Scaffold(
-      drawer: const AppDrawer(),
+      drawer: null,
       floatingActionButton: fab,
       backgroundColor: AppColors.background,
       body: _buildListBody(context, provider, currencyFormat, false),

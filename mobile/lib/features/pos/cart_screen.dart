@@ -275,109 +275,101 @@ class _CartScreenState extends State<CartScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Options Row (Customer & Payment Type)
-          Row(
+          // Customer Dropdown (Full Width)
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Customer
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Pelanggan",
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      height: 40,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: ButtonTheme(
-                          alignedDropdown: true,
-                          child: DropdownButton<String>(
-                            isExpanded: true,
-                            value: provider.selectedCustomerId.isEmpty
-                                ? 'umum'
-                                : provider.selectedCustomerId,
-                            items: [
-                              const DropdownMenuItem(
-                                value: 'umum',
-                                child: Text("Umum"),
-                              ),
-                              ...provider.customers.map(
-                                (c) => DropdownMenuItem(
-                                  value: c.id,
-                                  child: Text(
-                                    c.name,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) provider.setCustomer(val);
-                            },
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              const Text(
+                "Pelanggan",
+                style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
-              const SizedBox(width: 16),
-              // Payment
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Pembayaran",
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildChoiceChip(
-                            label: "Tunai",
-                            isSelected:
-                                !provider.isDebt &&
-                                provider.paymentType == 'cash',
-                            onTap: () {
-                              provider.setDebt(false);
-                              provider.setPaymentType('cash');
-                            },
-                            color: AppColors.primary,
-                          ),
+              const SizedBox(height: 8),
+              Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: ButtonTheme(
+                    alignedDropdown: true,
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      value: provider.selectedCustomerId.isEmpty
+                          ? 'umum'
+                          : provider.selectedCustomerId,
+                      items: [
+                        const DropdownMenuItem(
+                          value: 'umum',
+                          child: Text("Pelanggan Umum"),
                         ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: _buildChoiceChip(
-                            label: "Qris/Trf",
-                            isSelected:
-                                !provider.isDebt &&
-                                provider.paymentType == 'transfer',
-                            onTap: () {
-                              provider.setDebt(false);
-                              provider.setPaymentType('transfer');
-                            },
-                            color: Colors.purple,
+                        ...provider.customers.map(
+                          (c) => DropdownMenuItem(
+                            value: c.id,
+                            child: Text(
+                              c.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
                       ],
+                      onChanged: (val) {
+                        if (val != null) provider.setCustomer(val);
+                      },
                     ),
-                  ],
+                  ),
                 ),
               ),
             ],
           ),
 
+          const SizedBox(height: 16),
+
+          // Payment Type Row
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Metode Pembayaran",
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildChoiceChip(
+                      label: "Tunai",
+                      isSelected:
+                          !provider.isDebt && provider.paymentType == 'cash',
+                      onTap: () {
+                        provider.setDebt(false);
+                        provider.setPaymentType('cash');
+                      },
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildChoiceChip(
+                      label: "Qris/Transfer",
+                      isSelected:
+                          !provider.isDebt &&
+                          provider.paymentType == 'transfer',
+                      onTap: () {
+                        provider.setDebt(false);
+                        provider.setPaymentType('transfer');
+                      },
+                      color: Colors.purple,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
           const SizedBox(height: 12),
-          // Debt Toggle
+
+          // Debt Toggle Row
           Row(
             children: [
               Expanded(

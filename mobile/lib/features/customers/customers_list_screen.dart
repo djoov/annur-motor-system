@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../../ui/app_drawer.dart';
+
 import '../../ui/desktop_scaffold.dart';
 import 'customers_provider.dart';
 import 'customer_form_screen.dart';
@@ -67,7 +67,6 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
         }
 
         return Scaffold(
-          drawer: const AppDrawer(),
           floatingActionButton: FloatingActionButton(
             onPressed: () {
               Navigator.push(

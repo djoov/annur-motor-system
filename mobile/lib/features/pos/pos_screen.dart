@@ -12,7 +12,6 @@ import 'pos_provider.dart';
 import 'models/pos_models.dart';
 
 import '../history/history_screen.dart';
-import '../../ui/app_drawer.dart';
 
 import 'receipt_preview_screen.dart';
 import 'cart_screen.dart'; // Import CartScreen
@@ -148,7 +147,7 @@ class _PosScreenState extends State<PosScreen> {
                   const SizedBox(width: 8),
                 ],
               ),
-              drawer: DesktopScaffold.isDesktop ? null : const AppDrawer(),
+              drawer: null,
               body: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

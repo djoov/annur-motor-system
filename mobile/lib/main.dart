@@ -6,7 +6,7 @@ import 'core/theme.dart';
 import 'core/services/notification_service.dart';
 import 'features/auth/auth_provider.dart';
 import 'features/auth/login_screen.dart';
-import 'features/dashboard/dashboard_screen.dart';
+import 'features/home/home_screen.dart';
 import 'features/pos/pos_provider.dart';
 import 'features/history/history_provider.dart';
 import 'features/items/items_provider.dart';
@@ -145,7 +145,7 @@ class AuthWrapper extends StatelessWidget {
     }
 
     if (authProvider.user != null) {
-      return const DashboardScreen();
+      return const HomeScreen();
     }
 
     return const LoginScreen();

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme.dart';
-import '../../../ui/app_drawer.dart';
+
 import '../../../ui/desktop_scaffold.dart';
 import 'daily_sales_provider.dart';
 import '../../../../core/services/export_service.dart';
@@ -164,7 +164,6 @@ class _DailySalesScreenState extends State<DailySalesScreen> {
           ),
         ],
       ),
-      drawer: const AppDrawer(),
       body: Consumer<DailySalesProvider>(
         builder: (context, provider, child) {
           return _buildContent(provider, dateFormat, currencyFormat);

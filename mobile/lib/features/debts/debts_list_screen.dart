@@ -5,7 +5,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme.dart';
 import 'debt_provider.dart';
 import 'models/debt_model.dart';
-import '../../ui/app_drawer.dart';
 
 class DebtsListScreen extends StatelessWidget {
   const DebtsListScreen({super.key});
@@ -33,7 +32,6 @@ class DebtsListScreen extends StatelessWidget {
           ),
         ],
       ),
-      drawer: const AppDrawer(),
       body: Consumer<DebtProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading && provider.debts.isEmpty) {

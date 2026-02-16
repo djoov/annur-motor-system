@@ -79,56 +79,93 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Header Image
-            Container(
-              width: double.infinity,
-              height: 250,
-              color: Colors.white,
-              child: item.imageUrl != null && item.imageUrl!.isNotEmpty
-                  ? Image.network(
-                      item.imageUrl!,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        print("Image Error: $error");
-                        return const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                LucideIcons.imageOff,
-                                size: 48,
+            // Header Image - Responsive
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isLandscape =
+                    MediaQuery.of(context).orientation == Orientation.landscape;
+                final isTablet = constraints.maxWidth > 600;
+
+                // Limit image size on tablet/landscape
+                final maxSize = isLandscape
+                    ? 200.0
+                    : (isTablet ? 280.0 : double.infinity);
+
+                return Center(
+                  child: Container(
+                    width: maxSize == double.infinity
+                        ? double.infinity
+                        : maxSize,
+                    margin: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: AspectRatio(
+                      aspectRatio: 1, // Square 1:1 ratio
+                      child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                          ? Image.network(
+                              item.imageUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                print("Image Error: $error");
+                                return const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        LucideIcons.imageOff,
+                                        size: 48,
+                                        color: AppColors.mutedForeground,
+                                      ),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        "Gagal memuat gambar",
+                                        style: TextStyle(
+                                          color: AppColors.mutedForeground,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Center(
+                                      child: CircularProgressIndicator(
+                                        value:
+                                            loadingProgress
+                                                    .expectedTotalBytes !=
+                                                null
+                                            ? loadingProgress
+                                                      .cumulativeBytesLoaded /
+                                                  loadingProgress
+                                                      .expectedTotalBytes!
+                                            : null,
+                                      ),
+                                    );
+                                  },
+                            )
+                          : const Center(
+                              child: Icon(
+                                LucideIcons.package,
+                                size: 64,
                                 color: AppColors.mutedForeground,
                               ),
-                              SizedBox(height: 8),
-                              Text(
-                                "Gagal memuat gambar",
-                                style: TextStyle(
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                      loadingProgress.expectedTotalBytes!
-                                : null,
-                          ),
-                        );
-                      },
-                    )
-                  : const Center(
-                      child: Icon(
-                        LucideIcons.package,
-                        size: 64,
-                        color: AppColors.mutedForeground,
-                      ),
+                            ),
                     ),
+                  ),
+                );
+              },
             ),
 
             Padding(

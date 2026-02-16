@@ -10,6 +10,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   firebase_storage
   flutter_pos_printer_platform
   gal
+  geolocator_windows
   permission_handler_windows
   screen_retriever
   share_plus

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../../ui/app_drawer.dart';
+
 import '../../ui/desktop_scaffold.dart';
 import 'categories_provider.dart';
 import 'category_form_screen.dart';
@@ -60,7 +60,6 @@ class CategoriesListScreen extends StatelessWidget {
           ),
         ],
       ),
-      drawer: const AppDrawer(),
       body: Consumer<CategoriesProvider>(
         builder: (context, provider, child) {
           return _buildListBody(context, provider);

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme.dart';
-import '../../ui/app_drawer.dart';
+
 import '../../ui/desktop_scaffold.dart';
 import 'stock_opname_provider.dart';
 import 'stock_opname_form_screen.dart';
@@ -77,7 +77,6 @@ class _StockOpnameListScreenState extends State<StockOpnameListScreen> {
           ),
         ],
       ),
-      drawer: const AppDrawer(),
       body: _buildList(provider),
     );
   }

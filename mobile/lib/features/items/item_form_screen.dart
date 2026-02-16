@@ -9,7 +9,7 @@ import 'items_provider.dart';
 import '../categories/categories_provider.dart';
 import '../auth/auth_provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import '../../core/services/cloudinary_service.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart'; // For kIsWeb
 import '../scan/scan_screen.dart';
@@ -41,6 +41,7 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
   XFile? _imageFile;
   String? _imageUrl;
   bool _isUploading = false;
+  String _uploadStatus = '';
 
   @override
   void initState() {
@@ -205,9 +206,56 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
                           ),
                         ),
                       ),
+                    // Delete button
+                    if (_imageFile != null ||
+                        (_imageUrl != null && _imageUrl!.isNotEmpty))
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: _deleteImage,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              LucideIcons.x,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
+              // Upload status text
+              if (_isUploading)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _uploadStatus.isEmpty
+                            ? "Memproses gambar..."
+                            : _uploadStatus,
+                        style: const TextStyle(
+                          color: AppColors.mutedForeground,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 32),
 
               // --- Product Info Section ---
@@ -679,29 +727,45 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
     }
   }
 
+  void _deleteImage() {
+    setState(() {
+      _imageFile = null;
+      _imageUrl = null;
+    });
+  }
+
   Future<String?> _uploadImage() async {
     if (_imageFile == null) return null;
-    try {
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('product_images')
-          .child(
-            '${DateTime.now().millisecondsSinceEpoch}_${_imageFile!.name}',
-          );
 
-      if (kIsWeb) {
-        await storageRef.putData(await _imageFile!.readAsBytes());
-      } else {
-        await storageRef.putFile(File(_imageFile!.path));
-      }
-      return await storageRef.getDownloadURL();
-    } catch (e) {
-      print("Upload Failed: $e");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Gagal upload gambar")));
-      return null;
+    setState(() {
+      _isUploading = true;
+      _uploadStatus = "Mengompres gambar...";
+    });
+
+    print("Starting Cloudinary upload...");
+
+    setState(() {
+      _uploadStatus = "Mengupload ke server...";
+    });
+
+    final url = await CloudinaryService.uploadImage(_imageFile!);
+
+    setState(() {
+      _isUploading = false;
+      _uploadStatus = '';
+    });
+
+    if (url == null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Gagal upload gambar. Pastikan Cloudinary sudah dikonfigurasi.",
+          ),
+        ),
+      );
     }
+
+    return url;
   }
 
   Widget _buildSectionCard({

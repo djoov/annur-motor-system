@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme.dart';
-import '../../ui/app_drawer.dart';
+
 import 'user_provider.dart';
 import 'user_model.dart';
 
@@ -103,13 +103,219 @@ class _UsersListScreenState extends State<UsersListScreen> {
     );
   }
 
+  void _showUserDetail(UserModel user) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle bar
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // User header
+            Row(
+              children: [
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundColor: user.role == 'admin'
+                          ? AppColors.primary
+                          : Colors.grey[300],
+                      foregroundColor: user.role == 'admin'
+                          ? Colors.white
+                          : Colors.black,
+                      child: Icon(
+                        user.role == 'admin'
+                            ? LucideIcons.shield
+                            : LucideIcons.user,
+                        size: 28,
+                      ),
+                    ),
+                    if (user.isOnline)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.name,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        user.email,
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: user.role == 'admin'
+                              ? AppColors.primary.withOpacity(0.1)
+                              : Colors.grey.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          user.role.toUpperCase(),
+                          style: TextStyle(
+                            color: user.role == 'admin'
+                                ? AppColors.primary
+                                : Colors.grey[700],
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+
+            // Activity info
+            const Text(
+              "Informasi Aktivitas",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+
+            _buildInfoRow(
+              icon: user.isOnline ? LucideIcons.wifi : LucideIcons.wifiOff,
+              label: "Status",
+              value: user.isOnline ? "Online Sekarang" : "Offline",
+              valueColor: user.isOnline ? Colors.green : Colors.grey,
+            ),
+
+            _buildInfoRow(
+              icon: LucideIcons.clock,
+              label: "Terakhir Aktif",
+              value: user.lastSeenText,
+            ),
+
+            if (user.isOnline)
+              _buildInfoRow(
+                icon: LucideIcons.timer,
+                label: "Durasi Sesi",
+                value: user.sessionDurationText,
+              ),
+
+            _buildInfoRow(
+              icon: LucideIcons.smartphone,
+              label: "Perangkat",
+              value: user.deviceInfo ?? "Tidak diketahui",
+            ),
+
+            _buildInfoRow(
+              icon: LucideIcons.laptop,
+              label: "Platform",
+              value: user.devicePlatform ?? "Tidak diketahui",
+            ),
+
+            _buildInfoRow(
+              icon: LucideIcons.mapPin,
+              label: "Lokasi",
+              value: user.lastLocation ?? "Tidak diketahui",
+            ),
+
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 18, color: AppColors.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: valueColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProvider>(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text("Kelola Pengguna"), elevation: 0),
-      drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
       body: userProvider.isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -134,18 +340,68 @@ class _UsersListScreenState extends State<UsersListScreen> {
                     ],
                   ),
                   child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: isAdmin
-                          ? AppColors.primary
-                          : Colors.grey[300],
-                      foregroundColor: isAdmin ? Colors.white : Colors.black,
-                      child: Icon(
-                        isAdmin ? LucideIcons.shield : LucideIcons.user,
-                      ),
+                    onTap: () => _showUserDetail(user),
+                    leading: Stack(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: isAdmin
+                              ? AppColors.primary
+                              : Colors.grey[300],
+                          foregroundColor: isAdmin
+                              ? Colors.white
+                              : Colors.black,
+                          child: Icon(
+                            isAdmin ? LucideIcons.shield : LucideIcons.user,
+                          ),
+                        ),
+                        // Online indicator
+                        if (user.isOnline)
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                    title: Text(
-                      user.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    title: Row(
+                      children: [
+                        Text(
+                          user.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        if (user.isOnline) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              "Online",
+                              style: TextStyle(
+                                color: Colors.green,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     subtitle: Text("${user.email}\nRole: ${user.role}"),
                     isThreeLine: true,

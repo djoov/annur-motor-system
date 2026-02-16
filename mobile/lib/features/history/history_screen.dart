@@ -7,7 +7,7 @@ import '../../core/theme.dart';
 import 'history_provider.dart';
 
 import 'models/transaction_model.dart';
-import '../../ui/app_drawer.dart';
+
 import '../returns/return_selection_screen.dart';
 import '../auth/auth_provider.dart';
 
@@ -330,9 +330,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
               ],
       ),
-      drawer: DesktopScaffold.isDesktop
-          ? null
-          : const AppDrawer(), // No drawer on desktop
+      drawer: null,
       body: Consumer<HistoryProvider>(
         builder: (context, history, child) {
           return Column(
