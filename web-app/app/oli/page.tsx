@@ -1,28 +1,23 @@
 import { PublicNavbar } from "@/components/layout/public-navbar"
 import Image from "next/image"
 import Link from "next/link"
-import { Droplet, Shield, Clock, Wrench, CheckCircle, AlertCircle, Phone, Package } from "lucide-react"
+import { Droplet, Shield, Clock, Wrench, CheckCircle, AlertCircle, Phone, Package, Zap } from "lucide-react"
 import { Metadata } from "next"
 import { db } from "@/lib/firebase"
-import { collection, getDocs, query, where, orderBy } from "firebase/firestore"
+import { collection, getDocs, query, orderBy } from "firebase/firestore"
 import { Item } from "@/types"
+import { AIAssistant } from "@/components/ai-assistant"
 
 export const metadata: Metadata = {
     title: 'Ganti Oli & Cairan - Annur Motor Magelang',
-    description: 'Layanan ganti oli dan produk oli motor terlengkap di Magelang. Oli mesin, oli gardan, oli transmisi, dan cairan pendingin berkualitas.',
+    description: 'Sistem pelumas dan cairan mesin berkualitas tinggi.',
 }
 
-// Fetch oil products from database
 async function getOilProducts(): Promise<Item[]> {
     try {
-        // Query products with category containing 'pelumas' or 'cairan' (case insensitive match)
-        const q = query(
-            collection(db, "items"),
-            orderBy("name")
-        )
+        const q = query(collection(db, "items"), orderBy("name"))
         const snapshot = await getDocs(q)
 
-        // Filter for pelumas/cairan category (case insensitive)
         const items = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() } as Item))
             .filter(item => {
@@ -37,214 +32,194 @@ async function getOilProducts(): Promise<Item[]> {
     }
 }
 
-// Tips perawatan
 const maintenanceTips = [
     {
         icon: Clock,
-        title: "Ganti Tepat Waktu",
-        desc: "Ganti oli setiap 2.000-3.000 km atau 1-2 bulan sekali untuk perlindungan optimal."
+        title: "TIMING PRESISI",
+        desc: "Siklus penggantian setiap 2.000 KM memastikan viskositas tetap pada level struktural."
     },
     {
         icon: Droplet,
-        title: "Cek Level Oli",
-        desc: "Periksa level oli sebelum berkendara jauh. Oli rendah bisa menyebabkan overheat."
+        title: "LEVEL MONITORING",
+        desc: "Inspeksi volume pelumas berkala mencegah kegagalan fatal akibat overheat."
     },
     {
         icon: Shield,
-        title: "Gunakan Oli Sesuai",
-        desc: "Pilih viskositas oli yang tepat sesuai rekomendasi pabrikan motor Anda."
+        title: "SPESIFIKASI OEM",
+        desc: "Penerapan grade pelumas yang sesuai blueprint pabrikan asli."
     },
     {
         icon: Wrench,
-        title: "Servis Berkala",
-        desc: "Lakukan tune-up rutin untuk memastikan mesin selalu dalam kondisi prima."
+        title: "TUNE-UP RUTIN",
+        desc: "Kalibrasi menyeluruh untuk mempertahankan Output Horsepower maksimal."
     },
-]
-
-// Manfaat ganti oli rutin
-const benefits = [
-    "Mesin lebih awet dan tahan lama",
-    "Bahan bakar lebih hemat (irit bensin)",
-    "Performa mesin tetap maksimal",
-    "Mencegah overheat dan kerusakan",
-    "Mengurangi gesekan komponen mesin",
-    "Suara mesin lebih halus dan senyap",
 ]
 
 export default async function OilChangePage() {
     const oilProducts = await getOilProducts()
 
     return (
-        <main className="bg-gradient-to-b from-slate-50 to-white min-h-screen">
+        <main className="bg-zinc-950 min-h-screen text-zinc-300 font-sans selection:bg-orange-500/30 selection:text-white">
             <PublicNavbar />
 
-            {/* Hero Section */}
-            <section className="pt-32 pb-16 px-4 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent" />
-                <div className="container mx-auto text-center relative z-10">
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-full text-sm font-medium mb-6">
-                        <Droplet className="w-4 h-4" />
-                        Layanan Ganti Oli & Cairan
+            {/* --- HERO SECTION --- */}
+            <section className="relative min-h-[85vh] flex items-center pt-24 pb-16 px-4 bg-black border-b border-zinc-800 overflow-hidden">
+                <div className="absolute inset-0 z-0">
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:4rem_4rem]"></div>
+                    <div className="absolute top-0 right-0 w-[800px] h-full bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-orange-900/20 via-transparent to-transparent pointer-events-none"></div>
+                </div>
+
+                <div className="container mx-auto relative z-10 flex flex-col lg:flex-row items-center gap-16">
+                    <div className="flex-1">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-zinc-900 border border-zinc-800 text-orange-500 font-mono text-xs mb-8 tracking-widest uppercase">
+                            <Droplet className="w-4 h-4 fill-orange-500" />
+                            Modul Lubrikasi Aktif
+                        </div>
+                        <h1 className="text-5xl md:text-7xl lg:text-8xl font-black text-white mb-6 uppercase tracking-tighter leading-[0.9]">
+                            LUBRICANT <br/>
+                            <span className="text-orange-500">SYSTEMS</span>
+                        </h1>
+                        <p className="text-lg text-zinc-400 max-w-xl mb-12 font-medium tracking-wide">
+                            Formula pelumas high-grade untuk meminimalisir friksi, meredam panas termal, dan mengekstraksi tenaga murni mesin Anda.
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <Link
+                                href="https://wa.me/6281287562914?text=Halo, saya mau ganti oli..."
+                                target="_blank"
+                                className="inline-flex items-center justify-center gap-3 px-10 py-6 bg-orange-600 hover:bg-orange-500 text-white font-black uppercase tracking-widest rounded-none border border-orange-500 transition-colors"
+                            >
+                                <Phone className="w-5 h-5" />
+                                RESERVASI SERVIS
+                            </Link>
+                        </div>
                     </div>
-                    <h1 className="text-4xl md:text-5xl font-black text-slate-800 mb-6 leading-tight">
-                        Jaga Mesin Motor Anda<br />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-600">Tetap Prima</span>
-                    </h1>
-                    <p className="text-lg text-slate-600 max-w-2xl mx-auto mb-8">
-                        Kami menyediakan berbagai jenis oli motor berkualitas dan layanan ganti oli profesional untuk menjaga performa mesin Anda.
-                    </p>
-                    <Link
-                        href="https://wa.me/6285743907548?text=Halo, saya mau tanya tentang layanan ganti oli"
-                        target="_blank"
-                        className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-full shadow-lg hover:shadow-xl transition-all hover:-translate-y-1"
-                    >
-                        <Phone className="w-5 h-5" />
-                        Hubungi Kami
-                    </Link>
+
+                    {/* AI ASSISTANT INJECTED IN HERO */}
+                    <div className="flex-1 w-full lg:max-w-xl">
+                        <AIAssistant />
+                    </div>
                 </div>
             </section>
 
-            {/* Pentingnya Ganti Oli */}
-            <section className="py-16 px-4 bg-white">
+            {/* --- SYSTEM REQUIREMENT (Pentingnya Oli) --- */}
+            <section className="py-24 px-4 bg-zinc-950 border-b border-zinc-800">
                 <div className="container mx-auto">
-                    <div className="grid md:grid-cols-2 gap-12 items-center">
-                        <div>
-                            <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium mb-4">
-                                <AlertCircle className="w-4 h-4" />
-                                Penting Diketahui
-                            </div>
-                            <h2 className="text-3xl font-bold text-slate-800 mb-6">
-                                Mengapa Ganti Oli Itu Penting?
-                            </h2>
-                            <p className="text-slate-600 mb-6 leading-relaxed">
-                                Oli mesin berfungsi sebagai pelumas yang melindungi komponen mesin dari gesekan dan panas berlebih.
-                                Seiring waktu, oli akan terkontaminasi kotoran dan kehilangan efektivitasnya.
-                                Ganti oli tepat waktu adalah investasi kecil untuk mencegah kerusakan besar pada mesin.
-                            </p>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {benefits.map((benefit, i) => (
-                                    <div key={i} className="flex items-center gap-2 text-slate-700">
-                                        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                                        <span className="text-sm">{benefit}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="relative h-80 md:h-96 rounded-2xl overflow-hidden shadow-xl">
+                    <div className="grid md:grid-cols-2 gap-16 items-center">
+                        <div className="order-2 md:order-1 relative h-96 rounded-none overflow-hidden border border-zinc-800 group">
                             <Image
                                 src="https://images.unsplash.com/photo-1487754180451-c456f719a1fc?w=800&h=600&fit=crop"
                                 alt="Mekanik ganti oli motor"
                                 fill
-                                className="object-cover"
+                                className="object-cover filter grayscale contrast-125 group-hover:grayscale-0 transition-all duration-700"
                             />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 mix-blend-overlay"></div>
+                            <div className="absolute inset-0 border-[10px] border-black/40"></div>
+                            <div className="absolute bottom-4 left-4 bg-black border border-zinc-800 px-3 py-1 font-mono text-[10px] text-zinc-500">IMG // MAINTENANCE_BAY_01</div>
+                        </div>
+
+                        <div className="order-1 md:order-2">
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="w-12 h-px bg-orange-500"></div>
+                                <h2 className="text-orange-500 font-bold tracking-[0.2em] uppercase text-sm">CRITICAL MAINTENANCE</h2>
+                            </div>
+                            <h3 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tighter mb-8">
+                                Mengapa Pelumasan Itu Vital?
+                            </h3>
+                            <p className="text-zinc-400 mb-8 leading-relaxed font-medium">
+                                Oli mesin bertindak sebagai sistem perlindungan utama dari friksi mekanis dan fluktuasi panas ekstrem. Kegagalan sistem pelumasan dapat mengakibatkan keausan fatal pada komponen internal.
+                            </p>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {[
+                                    "Masa pakai komponen meningkat",
+                                    "Efisiensi termal lebih baik",
+                                    "Output tenaga maksimal",
+                                    "Mencegah overheat blok silinder",
+                                    "Reduksi friksi mekanikal",
+                                    "Peredaman suara operasional",
+                                ].map((benefit, i) => (
+                                    <div key={i} className="flex items-start gap-3 text-zinc-300">
+                                        <Zap className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                                        <span className="text-sm font-bold uppercase tracking-wider">{benefit}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            {/* Produk Oli dari Database */}
-            <section className="py-16 px-4 bg-gradient-to-b from-slate-50 to-white">
+            {/* --- DATABASE OLI --- */}
+            <section className="py-24 px-4 bg-black border-b border-zinc-800">
                 <div className="container mx-auto">
-                    <div className="text-center mb-12">
-                        <h2 className="text-3xl font-bold text-slate-800 mb-4">Produk Oli & Pelumas Kami</h2>
-                        <p className="text-slate-600 max-w-xl mx-auto">
-                            Tersedia {oilProducts.length} produk pelumas dan cairan untuk semua jenis motor
+                    <div className="mb-12">
+                        <div className="flex items-center gap-4 mb-4">
+                            <div className="w-12 h-px bg-orange-500"></div>
+                            <h2 className="text-orange-500 font-bold tracking-[0.2em] uppercase text-sm">DATABASE INVENTORY</h2>
+                        </div>
+                        <h3 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tighter">Liquid Hardware</h3>
+                        <p className="text-zinc-400 mt-4 max-w-xl font-medium">
+                            {oilProducts.length} SKU terdeteksi dalam sub-kategori pelumas dan cairan pendingin.
                         </p>
                     </div>
 
                     {oilProducts.length === 0 ? (
-                        <div className="text-center py-12 text-slate-400">
-                            <Droplet className="w-16 h-16 mx-auto mb-4 opacity-20" />
-                            <p>Belum ada produk pelumas di database.</p>
+                        <div className="text-center py-20 bg-zinc-950 border border-zinc-800">
+                            <AlertCircle className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
+                            <h3 className="font-black text-white uppercase tracking-widest">DATA TIDAK DITEMUKAN</h3>
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                             {oilProducts.map((product) => (
-                                <div key={product.id} className="bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-lg transition-all p-4 text-center group">
-                                    <div className="relative w-full aspect-square rounded-lg overflow-hidden mb-3 bg-gradient-to-b from-amber-50 to-orange-50">
+                                <div key={product.id} className="bg-zinc-950 border border-zinc-800 hover:border-orange-500 transition-all p-5 text-center group cursor-pointer relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-full h-1 bg-zinc-800 group-hover:bg-orange-500 transition-colors z-20"></div>
+                                    <div className="relative w-full aspect-square bg-black border border-zinc-900 mb-4 flex items-center justify-center p-4">
                                         {product.imageUrl ? (
                                             <Image
                                                 src={product.imageUrl}
                                                 alt={product.name}
                                                 fill
-                                                className="object-cover"
+                                                className="object-contain p-4 filter brightness-75 group-hover:brightness-110 transition-all"
                                             />
                                         ) : (
-                                            <Package className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 text-amber-400 opacity-50" />
+                                            <Package className="w-12 h-12 text-zinc-800" />
                                         )}
                                     </div>
-                                    <h3 className="font-bold text-slate-800 text-sm mb-1 group-hover:text-amber-600 transition-colors line-clamp-2">{product.name}</h3>
+                                    <h3 className="font-black text-white text-sm mb-2 uppercase tracking-tight line-clamp-2 leading-tight group-hover:text-orange-500 transition-colors">
+                                        {product.name}
+                                    </h3>
                                     {product.code && (
-                                        <p className="text-[10px] text-slate-400 font-mono">{product.code}</p>
+                                        <p className="text-[10px] text-zinc-500 font-mono border border-zinc-800 inline-block px-2 py-0.5 mt-2 bg-black">{product.code}</p>
                                     )}
                                 </div>
                             ))}
                         </div>
                     )}
-
-                    <p className="text-center mt-8 text-sm text-slate-500">
-                        * Hubungi kami untuk informasi harga dan ketersediaan produk.
-                    </p>
                 </div>
             </section>
 
-            {/* Tips Perawatan */}
-            <section className="py-16 px-4 bg-white">
+            {/* --- PROTOKOL PERAWATAN --- */}
+            <section className="py-24 px-4 bg-zinc-950 border-b border-orange-600">
                 <div className="container mx-auto">
-                    <div className="text-center mb-12">
-                        <h2 className="text-3xl font-bold text-slate-800 mb-4">Tips Perawatan Mesin</h2>
-                        <p className="text-slate-600 max-w-xl mx-auto">
-                            Panduan sederhana untuk menjaga motor Anda selalu dalam kondisi prima
-                        </p>
+                    <div className="text-center mb-16">
+                        <h2 className="text-orange-500 font-bold tracking-[0.2em] uppercase text-sm mb-4">STANDARD OPERATING PROCEDURE</h2>
+                        <h3 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tighter">Protokol Perawatan</h3>
                     </div>
 
-                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-0 border border-zinc-800">
                         {maintenanceTips.map((tip, i) => (
-                            <div key={i} className="bg-gradient-to-b from-slate-50 to-white p-6 rounded-xl border border-slate-100 hover:border-amber-200 transition-all group">
-                                <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-amber-500 group-hover:text-white transition-all">
-                                    <tip.icon className="w-6 h-6 text-amber-600 group-hover:text-white" />
+                            <div key={i} className="bg-black p-8 border-b lg:border-b-0 lg:border-r border-zinc-800 hover:bg-zinc-900 transition-colors group relative">
+                                <div className="absolute top-0 right-0 w-16 h-16 bg-zinc-900 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:bg-orange-600/20"></div>
+                                <div className="w-12 h-12 bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-6 group-hover:border-orange-500 transition-colors">
+                                    <tip.icon className="w-6 h-6 text-zinc-500 group-hover:text-orange-500" />
                                 </div>
-                                <h3 className="font-bold text-slate-800 mb-2">{tip.title}</h3>
-                                <p className="text-sm text-slate-600">{tip.desc}</p>
+                                <h3 className="font-black text-white mb-4 uppercase tracking-tighter text-xl">{tip.title}</h3>
+                                <p className="text-sm text-zinc-400 font-medium leading-relaxed">{tip.desc}</p>
                             </div>
                         ))}
                     </div>
                 </div>
             </section>
-
-            {/* CTA Section */}
-            <section className="py-16 px-4 bg-gradient-to-r from-amber-500 to-orange-600">
-                <div className="container mx-auto text-center">
-                    <h2 className="text-3xl font-bold text-white mb-4">Waktunya Ganti Oli?</h2>
-                    <p className="text-amber-100 mb-8 max-w-xl mx-auto">
-                        Jangan tunggu mesin bermasalah! Kunjungi Annur Motor untuk layanan ganti oli profesional dengan harga terjangkau.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <Link
-                            href="https://wa.me/6285743907548?text=Halo, saya mau ganti oli, bisa ke lokasi sekarang?"
-                            target="_blank"
-                            className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-amber-600 font-bold rounded-full shadow-lg hover:shadow-xl transition-all"
-                        >
-                            <Phone className="w-5 h-5" />
-                            Hubungi via WhatsApp
-                        </Link>
-                        <Link
-                            href="/#lokasi"
-                            className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-transparent border-2 border-white text-white font-bold rounded-full hover:bg-white/10 transition-all"
-                        >
-                            Lihat Lokasi Toko
-                        </Link>
-                    </div>
-                </div>
-            </section>
-
-            {/* Footer */}
-            <footer className="py-8 px-4 bg-slate-900 text-center">
-                <p className="text-slate-400 text-sm">© 2025 Annur Motor. Toko Spare Part Motor Terpercaya di Magelang.</p>
-            </footer>
         </main>
     )
 }

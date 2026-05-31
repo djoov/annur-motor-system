@@ -1,0 +1,89 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================
+    // Helper Functions
+    // ============================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ============================
+    // Items (Produk / Sparepart)
+    // ============================
+    // Public: bisa baca daftar produk (untuk katalog & landing page)
+    // Write: hanya user yang sudah login (staf)
+    match /items/{itemId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    // ============================
+    // Categories
+    // ============================
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    // ============================
+    // Transactions (Penjualan)
+    // ============================
+    // Hanya user yang login bisa baca & tulis transaksi
+    // Data sensitif: buyPrice, profit, dll.
+    match /transactions/{transactionId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // ============================
+    // Customers (Pelanggan)
+    // ============================
+    match /customers/{customerId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // ============================
+    // Debts (Piutang / Hutang)
+    // ============================
+    match /debts/{debtId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // ============================
+    // User Profiles / Settings
+    // ============================
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+
+    // ============================
+    // Settings (Pengaturan Toko)
+    // ============================
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // ============================
+    // Visitor Locations (dari LocationTracker)
+    // ============================
+    match /visitor_locations/{locationId} {
+      allow create: if true;  // Pengunjung bisa mengirim lokasi
+      allow read, update, delete: if isAuthenticated();
+    }
+
+    // ============================
+    // Default: Deny semua akses lain
+    // ============================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

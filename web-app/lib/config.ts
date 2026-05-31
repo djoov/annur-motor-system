@@ -2,9 +2,11 @@ export const SITE_CONFIG = {
     name: "Annur Motor",
     description: "Toko Spare Part Motor Terpercaya di Magelang",
     whatsapp: {
-        number: "6288983773114",
+        number: "6281287562914",
         defaultMessage: "Halo Annur Motor, saya ingin bertanya...",
-        getLink: () => `https://wa.me/6288983773114?text=Halo%20Annur%20Motor,%20saya%20ingin%20bertanya...`
+        getLink() {
+            return `https://wa.me/${this.number}?text=${encodeURIComponent(this.defaultMessage)}`;
+        }
     },
     contact: {
         address: "Jl. Raya Pucang No. 12, Karang Wetan, Pucang, Secang, Kabupaten Magelang, Jawa Tengah",
