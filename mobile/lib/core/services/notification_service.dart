@@ -23,7 +23,7 @@ class NotificationService {
         );
 
     await _notificationsPlugin.initialize(
-      initializationSettings,
+      settings: initializationSettings,
       onDidReceiveNotificationResponse: (details) {
         // Handle notification tap
       },
@@ -44,8 +44,8 @@ class NotificationService {
   }) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
-          'annur_notifications', // channel Id
-          'Annur Notifications', // channel Name
+          'mekanikhub_notifications', // channel Id
+          'MekanikHub Notifications', // channel Name
           channelDescription: 'Main channel for app notifications',
           importance: Importance.max,
           priority: Priority.high,
@@ -56,6 +56,11 @@ class NotificationService {
       android: androidPlatformChannelSpecifics,
     );
 
-    await _notificationsPlugin.show(id, title, body, platformChannelSpecifics);
+    await _notificationsPlugin.show(
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: platformChannelSpecifics,
+    );
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'dart:io';
@@ -63,7 +63,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
 
   Future<void> _importCSV() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['csv'],
         withData: true,
@@ -79,7 +79,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
         content = await file.readAsString();
       }
 
-      final rows = const CsvToListConverter().convert(content, eol: '\n');
+      final rows = Csv().decode(content);
       if (rows.isEmpty) {
         _showMessage("File CSV kosong");
         return;

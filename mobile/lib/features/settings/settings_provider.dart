@@ -30,7 +30,7 @@ class SettingsProvider with ChangeNotifier {
   StreamSubscription<BTStatus>? _subscriptionBk;
 
   // Receipt Settings
-  String _shopName = "Annur Motor";
+  String _shopName = "MekanikHub";
   String _shopAddress = "Jl. Contoh No. 123";
   String _shopPhone = "0812-3456-7890";
   String _receiptFooter = "Terima Kasih atas Kunjungan Anda";
@@ -311,7 +311,7 @@ class SettingsProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
 
     // First try to load from SharedPreferences (fast, local)
-    _shopName = prefs.getString('shop_name') ?? "Annur Motor";
+    _shopName = prefs.getString('shop_name') ?? "MekanikHub";
     _shopAddress = prefs.getString('shop_address') ?? "Jl. Contoh No. 123";
     _shopPhone = prefs.getString('shop_phone') ?? "0812-3456-7890";
     _receiptFooter = prefs.getString('receipt_footer') ?? "Terima Kasih";
@@ -607,7 +607,7 @@ class SettingsProvider with ChangeNotifier {
       final device = BluetoothDevice(remoteId: DeviceIdentifier(remoteId));
 
       // 1. Connect
-      await device.connect(autoConnect: false);
+      // await device.connect(autoConnect: false);
       print("Direct Connected");
 
       // 2. Discover Services

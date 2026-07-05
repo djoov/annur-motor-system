@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/theme.dart';
 
-import 'stock_request_provider.dart';
+import '../stock_request/stock_request_provider.dart';
 import '../auth/auth_provider.dart';
 import 'package:intl/intl.dart';
 
@@ -19,7 +19,7 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<StockRequestProvider>(context, listen: false).init();
+      Provider.of<StockRequestProvider>(context, listen: false).fetchRequests();
     });
   }
 
@@ -29,7 +29,7 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
       builder: (context) => AlertDialog(
         title: const Text("Setujui Permintaan?"),
         content: Text(
-          "Stok gudang akan dikurangi ${request.requestedQty} dan stok toko ditambah sejumlah yang sama.",
+          "Stok gudang akan dikurangi ${request.requestQty} dan stok toko ditambah sejumlah yang sama.",
         ),
         actions: [
           TextButton(
@@ -46,11 +46,7 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
                   await Provider.of<StockRequestProvider>(
                     context,
                     listen: false,
-                  ).approveRequest(
-                    request,
-                    auth.user!.uid,
-                    auth.userModel?.name ?? 'Admin',
-                  );
+                  ).approveRequest(request);
 
               if (mounted) {
                 if (error == null) {
@@ -95,11 +91,7 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
               await Provider.of<StockRequestProvider>(
                 context,
                 listen: false,
-              ).rejectRequest(
-                request.id,
-                auth.user!.uid,
-                auth.userModel?.name ?? 'Admin',
-              );
+              ).rejectRequest(request);
 
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -117,7 +109,7 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<StockRequestProvider>(context);
-    final requests = provider.pendingRequests;
+    final requests = provider.requests.where((r) => r.status == 'pending').toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -182,7 +174,7 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                "Minta: ${req.requestedQty}",
+                                "Minta: ${req.requestQty}",
                                 style: const TextStyle(
                                   color: AppColors.primary,
                                   fontWeight: FontWeight.bold,
@@ -193,7 +185,7 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          "Kode: ${req.itemCode}",
+                          "Kode: ${req.itemId}",
                           style: const TextStyle(
                             color: Colors.grey,
                             fontSize: 13,

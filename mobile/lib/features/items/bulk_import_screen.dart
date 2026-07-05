@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
+import 'dart:convert';
 import 'dart:io';
 import '../../ui/button.dart';
 
 import 'items_provider.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/services/export_service.dart';
 
 class BulkImportScreen extends StatefulWidget {
@@ -79,33 +80,24 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
 
   Future<void> _pickFile() async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['csv'],
       );
 
       if (result != null) {
         setState(() => _isLoading = true);
-        final file = File(result.files.single.path!);
-        final input = await file.readAsString();
+        final file = result.files.single;
+        
+        List<List<dynamic>> fields;
+        if (file.path != null) {
+          final csvString = await File(file.path!).readAsString();
+          fields = Csv().decode(csvString);
+        } else {
+          final input = utf8.decode(file.bytes!);
+          fields = Csv().decode(input);
+        }
 
-        // Parse CSV just to preview text or populate controller
-        // We put raw text into controller so user can edit before processing if needed
-        // Or we can parse immediately. Let's put in controller for transparency.
-
-        // However, standard CSV parsers handle quotes/commas better than simple text split.
-        // So let's convert the parsed LIST back to a clean string format for the text area?
-        // Or just show raw content.
-
-        // Better: Process directly but allow viewing.
-        // For simplicity with existing logic: Fill text controller with raw content.
-        // But if CSV has standard formatting (quotes etc), our manual parser below needs to be smart.
-        // Let's use the CSV package to parse, then re-format it for the text controller display
-        // so the user knows what we read.
-
-        final fields = const CsvToListConverter().convert(input, eol: '\n');
-
-        // Filter out header if present (heuristic: check if first row is header)
         int startRow = 0;
         if (fields.isNotEmpty &&
             fields[0][0].toString().toLowerCase() == 'kode') {
@@ -157,7 +149,7 @@ class _BulkImportScreenState extends State<BulkImportScreen> {
     // We add a dummy new line if needed? No converter handles string.
     List<List<dynamic>> rows;
     try {
-      rows = const CsvToListConverter().convert(text, eol: '\n');
+      rows = Csv().decode(text);
     } catch (e) {
       // Fallback manual split if CSV parser fails
       rows = [];

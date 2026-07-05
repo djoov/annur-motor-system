@@ -31,7 +31,7 @@ class ExportService {
     allRows.addAll(data);
 
     // 2. Convert to CSV String
-    String csvData = const ListToCsvConverter().convert(allRows);
+    String csvData = Csv().encode(allRows);
 
     // 3. Save/Download Logic
     if (kIsWeb) {
@@ -44,7 +44,7 @@ class ExportService {
       html.Url.revokeObjectUrl(url);
     } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       // Desktop Save Dialog
-      String? outputFile = await FilePicker.platform.saveFile(
+      String? outputFile = await FilePicker.saveFile(
         dialogTitle: 'Simpan file CSV',
         fileName: fileName,
         type: FileType.custom,

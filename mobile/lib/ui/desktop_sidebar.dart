@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
 import '../../features/auth/auth_provider.dart';
@@ -58,7 +58,7 @@ class DesktopSidebar extends StatelessWidget {
                 const SizedBox(width: 16),
                 const Expanded(
                   child: Text(
-                    "Annur Motor",
+                    "MekanikHub",
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 20,

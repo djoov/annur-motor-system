@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:dart_ping/dart_ping.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_pos_printer_platform/src/models/printer_device.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:flutter_pos_printer_platform/discovery.dart';

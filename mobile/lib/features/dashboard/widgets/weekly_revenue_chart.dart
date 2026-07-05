@@ -64,7 +64,7 @@ class WeeklyRevenueChart extends StatelessWidget {
           barTouchData: BarTouchData(
             enabled: false,
             touchTooltipData: BarTouchTooltipData(
-              tooltipBgColor: Colors.transparent,
+              getTooltipColor: (group) => Colors.transparent,
               tooltipPadding: EdgeInsets.zero,
               tooltipMargin: 8,
               getTooltipItem: (group, groupIndex, rod, rodIndex) {

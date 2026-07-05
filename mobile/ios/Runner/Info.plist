@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Annur Motor</string>
+	<string>MekanikHub</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>mobile</string>
+	<string>MekanikHub</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -45,5 +45,31 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- Camera Permission (Barcode Scanner - mobile_scanner) -->
+	<key>NSCameraUsageDescription</key>
+	<string>Diperlukan untuk scan barcode produk</string>
+
+	<!-- Bluetooth Permissions (Thermal Printer - flutter_blue_plus, blue_thermal_printer) -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Diperlukan untuk koneksi ke printer thermal Bluetooth</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Diperlukan untuk koneksi ke printer thermal Bluetooth</string>
+
+	<!-- Location Permission (User Activity Tracking - geolocator) -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Diperlukan untuk mencatat lokasi aktivitas pengguna</string>
+
+	<!-- Photo Library Permission (Product Image - image_picker) -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Diperlukan untuk memilih foto produk dari galeri</string>
+
+	<!-- Local Network Discovery (Printer Discovery) -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Diperlukan untuk menemukan printer di jaringan lokal</string>
+
+	<!-- Photo Library Add Permission (Save Receipt Screenshot - gal/screenshot) -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Diperlukan untuk menyimpan struk ke galeri foto</string>
 </dict>
 </plist>

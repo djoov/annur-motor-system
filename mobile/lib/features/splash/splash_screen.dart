@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/theme.dart';
-import '../../main.dart'; // import for AuthWrapper
+import '../auth/auth_provider.dart';
+import '../auth/login_screen.dart';
+import '../home/home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -21,12 +24,8 @@ class _SplashScreenState extends State<SplashScreen> {
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const AuthWrapper(),
-          transitionsBuilder: (_, animation, __, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-          transitionDuration: const Duration(milliseconds: 800),
+        MaterialPageRoute(
+          builder: (_) => const _AuthWrapper(),
         ),
       );
     }
@@ -44,7 +43,7 @@ class _SplashScreenState extends State<SplashScreen> {
             // Logo
             Image.asset(
               'assets/logo_app_new.png',
-              width: 300, // Even Bigger logo
+              width: 300,
               height: 300,
               fit: BoxFit.contain,
             ),
@@ -61,7 +60,7 @@ class _SplashScreenState extends State<SplashScreen> {
             const Spacer(),
             // Version Info
             Text(
-              "Annur Motor System v1.0.0",
+              "MekanikHub v1.0.0",
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey.shade400,
@@ -75,3 +74,24 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 }
+
+/// Auth gate — checks login state and routes accordingly
+class _AuthWrapper extends StatelessWidget {
+  const _AuthWrapper();
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+
+    if (authProvider.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (authProvider.user != null) {
+      return const HomeScreen();
+    }
+
+    return const LoginScreen();
+  }
+}
+

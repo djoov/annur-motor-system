@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:enum_to_string/enum_to_string.dart';
+
 import 'package:flutter_pos_printer_platform/printer.dart';
 // import 'package:flutter_star_prnt/flutter_star_prnt.dart';
 
@@ -8,7 +8,7 @@ enum StarEmulation { StarPRNT, StarLine, StarGraphic }
 
 class StarPrinter extends Printer {
   StarPrinter({StarEmulation emulation = StarEmulation.StarGraphic, int width = 580}) {
-    this._emulation = EnumToString.convertToString(emulation);
+    this._emulation = emulation.name;
     this._width = width;
   }
 

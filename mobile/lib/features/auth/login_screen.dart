@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/theme.dart';
 import '../../ui/button.dart';
 import '../../ui/input.dart';
@@ -82,7 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 16),
           const Text(
-            "Annur Motor System",
+            "MekanikHub",
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -273,7 +273,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 24),
                         const Text(
-                          "Annur Motor System",
+                          "MekanikHub",
                           style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,

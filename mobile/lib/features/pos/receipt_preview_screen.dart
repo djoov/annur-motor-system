@@ -3,7 +3,7 @@ import 'dart:io'; // added
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:gal/gal.dart';
@@ -411,7 +411,7 @@ class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
         final String fileName =
             "Struk_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.png";
 
-        final String? outputFile = await FilePicker.platform.saveFile(
+        final String? outputFile = await FilePicker.saveFile(
           dialogTitle: 'Simpan Struk ke...',
           fileName: fileName,
           type: FileType.image,

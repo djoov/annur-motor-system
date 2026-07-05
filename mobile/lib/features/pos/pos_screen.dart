@@ -2,7 +2,7 @@ import '../../ui/desktop_scaffold.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For Shortcuts
 import 'package:provider/provider.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme.dart';
 
@@ -86,7 +86,7 @@ class _PosScreenState extends State<PosScreen> {
             autofocus: true,
             child: Scaffold(
               appBar: AppBar(
-                title: const Text("Annur Motor POS"),
+                title: const Text("MekanikHub POS"),
                 actions: [
                   IconButton(
                     icon: const Icon(LucideIcons.history),

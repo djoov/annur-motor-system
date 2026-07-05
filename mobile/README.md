@@ -1,6 +1,6 @@
-# Annur Motor System (Mobile & Desktop POS)
+# MekanikHub (Mobile & Desktop POS)
 
-Annur Motor System is a robust and user-friendly Point of Sale (POS) and Inventory Management solution built with Flutter. It is designed to streamline operations for Annur Motor, supporting spare parts retail and mechanic services.
+MekanikHub is a robust and user-friendly Point of Sale (POS) and Inventory Management solution built with Flutter. It is designed to streamline operations for MekanikHub, supporting spare parts retail and mechanic services.
 
 The application leverages a responsive design that adapts seamlessly across **Android Mobile** (optimized for touch), **Tablets** (expanded grid/dashboard), and **Windows Desktop** (optimized for keyboard/mouse + thermal printing).
 
@@ -79,4 +79,4 @@ The application leverages a responsive design that adapts seamlessly across **An
 - **Printers**: Pair Bluetooth printers via system settings before connecting in-app.
 
 ---
-**Developed for Annur Motor** | *Empowering Workshop Efficiency*
+**Developed for MekanikHub** | *Empowering Workshop Efficiency*

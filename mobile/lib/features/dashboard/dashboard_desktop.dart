@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../auth/auth_provider.dart';
 import 'dashboard_provider.dart';
 import 'package:intl/intl.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'widgets/weekly_revenue_chart.dart';
 import '../../ui/desktop_scaffold.dart';
 import 'widgets/top_items_widget.dart';
