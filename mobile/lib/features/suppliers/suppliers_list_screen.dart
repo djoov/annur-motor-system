@@ -3,13 +3,14 @@ import 'package:provider/provider.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../ui/desktop_scaffold.dart';
+import '../../ui/app_list.dart';
 import 'suppliers_provider.dart';
 import 'supplier_form_screen.dart';
+import 'supplier_model.dart';
 import '../../core/theme.dart';
-import '../../ui/input.dart';
 
 class SuppliersListScreen extends StatefulWidget {
-  const SuppliersListScreen({Key? key}) : super(key: key);
+  const SuppliersListScreen({super.key});
 
   @override
   State<SuppliersListScreen> createState() => _SuppliersListScreenState();
@@ -23,16 +24,12 @@ class _SuppliersListScreenState extends State<SuppliersListScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text.toLowerCase();
-      });
+      setState(() => _searchQuery = _searchController.text.toLowerCase());
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = Provider.of<SuppliersProvider>(context, listen: false);
-      if (provider.suppliers.isEmpty) {
-        provider.fetchSuppliers();
-      }
+      final provider = context.read<SuppliersProvider>();
+      if (provider.suppliers.isEmpty) provider.fetchSuppliers();
     });
   }
 
@@ -42,202 +39,100 @@ class _SuppliersListScreenState extends State<SuppliersListScreen> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final provider = Provider.of<SuppliersProvider>(
+  void _openForm([SupplierModel? supplier]) {
+    Navigator.push(
       context,
-    ); // Listen to changes
-
-    // Desktop Layout
-    if (DesktopScaffold.isDesktop) {
-      return DesktopScaffold(
-        activeRoute: '/suppliers',
-        floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const SupplierFormScreen(),
-              ),
-            );
-          },
-          backgroundColor: AppColors.primary,
-          child: const Icon(LucideIcons.plus, color: Colors.white),
-        ),
-        body: _buildListBody(context, provider, _searchQuery),
-      );
-    }
-
-    // Mobile Layout
-    return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SupplierFormScreen()),
-          );
-        },
-        backgroundColor: AppColors.primary,
-        child: const Icon(LucideIcons.plus, color: Colors.white),
-      ),
-      body: _buildListBody(context, provider, _searchQuery),
+      MaterialPageRoute(builder: (_) => SupplierFormScreen(supplier: supplier)),
     );
   }
 
-  Widget _buildListBody(
-    BuildContext context,
-    SuppliersProvider provider,
-    String searchQuery,
-  ) {
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<SuppliersProvider>();
+    final fab = FloatingActionButton.extended(
+      onPressed: _openForm,
+      icon: const Icon(LucideIcons.plus),
+      label: const Text("Tambah Supplier"),
+    );
+    final body = _buildListBody(provider);
+
+    if (DesktopScaffold.isDesktop) {
+      return DesktopScaffold(
+        activeRoute: '/suppliers',
+        floatingActionButton: fab,
+        body: body,
+      );
+    }
+    return Scaffold(floatingActionButton: fab, body: body);
+  }
+
+  Widget _buildListBody(SuppliersProvider provider) {
     final filtered = provider.suppliers.where((s) {
-      return s.name.toLowerCase().contains(searchQuery) ||
-          s.contactPerson.toLowerCase().contains(searchQuery);
-    }).toList();
+      return s.name.toLowerCase().contains(_searchQuery) ||
+          s.contactPerson.toLowerCase().contains(_searchQuery);
+    }).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     return CustomScrollView(
       slivers: [
-        SliverAppBar(
-          floating: true,
-          pinned: true,
-          snap: false,
-          title: const Text("Data Supplier"),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(70),
-            child: Container(
-              color: AppColors.surface,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: CustomInput(
-                placeholder: "Cari Supplier / Sales...",
-                controller: _searchController,
-                suffixIcon: const Icon(LucideIcons.search, size: 20),
-              ),
-            ),
-          ),
+        AppSearchSliverAppBar(
+          title: "Supplier",
+          controller: _searchController,
+          hint: "Cari supplier atau nama sales",
         ),
-
         if (provider.isLoading && provider.suppliers.isEmpty)
           const SliverFillRemaining(
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: CircularProgressIndicator.adaptive()),
           )
         else if (filtered.isEmpty)
-          const SliverFillRemaining(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    LucideIcons.truck,
-                    size: 64,
-                    color: AppColors.mutedForeground,
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: provider.suppliers.isEmpty
+                ? AppEmptyState(
+                    icon: LucideIcons.truck,
+                    title: "Belum ada supplier",
+                    message: "Simpan distributor langganan untuk mencatat pembelian barang.",
+                    actionLabel: "Tambah Supplier",
+                    onAction: _openForm,
+                  )
+                : const AppEmptyState(
+                    icon: LucideIcons.search,
+                    title: "Supplier tidak ditemukan",
+                    message: "Coba nama lain.",
                   ),
-                  SizedBox(height: 16),
-                  Text(
-                    "Tidak ada supplier ditemukan",
-                    style: TextStyle(color: AppColors.mutedForeground),
-                  ),
-                ],
-              ),
-            ),
           )
         else
           SliverPadding(
-            padding: const EdgeInsets.all(16),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                final supplier = filtered[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            sliver: AppListPanelSliver(
+              itemCount: filtered.length,
+              dividerIndent: 72,
+              itemBuilder: (context, index) {
+                final s = filtered[index];
+                final subtitle = [
+                  if (s.contactPerson.isNotEmpty) s.contactPerson,
+                  if (s.phone.isNotEmpty) s.phone,
+                ].join(" · ");
+                return ListTile(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  leading: InitialAvatar(s.name),
+                  title: Text(
+                    s.name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              SupplierFormScreen(supplier: supplier),
-                        ),
-                      );
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            backgroundColor: Colors.teal.withOpacity(0.1),
-                            foregroundColor: Colors.teal,
-                            radius: 24,
-                            child: const Icon(LucideIcons.truck, size: 20),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  supplier.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      LucideIcons.user,
-                                      size: 14,
-                                      color: AppColors.mutedForeground,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      supplier.contactPerson.isNotEmpty
-                                          ? supplier.contactPerson
-                                          : "Tanpa Sales",
-                                      style: const TextStyle(
-                                        color: AppColors.mutedForeground,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                if (supplier.phone.isNotEmpty) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    supplier.phone,
-                                    style: const TextStyle(
-                                      color: AppColors.mutedForeground,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          const Icon(
-                            LucideIcons.chevronRight,
-                            color: AppColors.mutedForeground,
-                          ),
-                        ],
-                      ),
-                    ),
+                  subtitle: subtitle.isEmpty ? null : Text(subtitle),
+                  trailing: const Icon(
+                    LucideIcons.chevronRight,
+                    size: 18,
+                    color: AppColors.mutedForeground,
                   ),
+                  onTap: () => _openForm(s),
                 );
-              }, childCount: filtered.length),
+              },
             ),
           ),
+        const SliverToBoxAdapter(child: SizedBox(height: 96)),
       ],
     );
   }

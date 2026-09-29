@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Gradle caches/builds of the local plugin packages
+/packages/**/android/.gradle/
+/packages/**/android/build/

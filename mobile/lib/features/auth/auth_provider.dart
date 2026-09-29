@@ -22,6 +22,13 @@ class AuthProvider extends ChangeNotifier {
   // Helper for UI Masking
   bool get isAdmin => _userModel?.role == 'admin';
 
+  // New accounts start as 'pending' until an admin approves them.
+  // null userModel (e.g. offline fetch failure) is not treated as pending.
+  bool get isPendingApproval =>
+      _userModel != null &&
+      _userModel!.role != 'admin' &&
+      _userModel!.role != 'staff';
+
   AuthProvider() {
     _init();
   }
@@ -47,21 +54,29 @@ class AuthProvider extends ChangeNotifier {
       if (doc.exists) {
         _userModel = UserModel.fromFirestore(doc);
       } else {
-        // Fallback if user doc doesn't exist (e.g. first login or manual auth)
-        // For MVP, if it matches Main Admin Email/Dev, make admin?
-        // Or just default to Staff (safe).
-        // But for development, let's create a doc if missing?
-        // Let's just set as generic staff for now.
+        // No user doc (e.g. account created outside the app): register it as
+        // pending so it shows up in the admin's user list for approval.
         _userModel = UserModel(
           id: uid,
           email: _user?.email ?? '',
-          role: 'staff',
+          role: 'pending',
           name: _user?.displayName ?? 'User',
         );
+        await _db.collection('users').doc(uid).set({
+          ..._userModel!.toMap(),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
       }
     } catch (e) {
       print("Error fetching user role: $e");
     }
+  }
+
+  /// Re-reads the role from Firestore (used by the "waiting for approval" screen).
+  Future<void> refreshRole() async {
+    if (_user == null) return;
+    await _fetchUserRole(_user!.uid);
+    notifyListeners();
   }
 
   /// Update user activity in Firestore (called on login and periodically)
@@ -209,15 +224,18 @@ class AuthProvider extends ChangeNotifier {
         // 2. Update Display Name
         await cred.user!.updateDisplayName(name);
 
-        // 3. Create Firestore Doc
+        // 3. Create Firestore Doc — stays 'pending' until an admin approves
         final newUser = UserModel(
           id: cred.user!.uid,
           email: email,
           name: name,
-          role: 'staff',
+          role: 'pending',
         );
 
-        await _db.collection('users').doc(cred.user!.uid).set(newUser.toMap());
+        await _db.collection('users').doc(cred.user!.uid).set({
+          ...newUser.toMap(),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
 
         // 4. Set local state
         _user = cred.user;
@@ -231,21 +249,30 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> becomeAdmin() async {
-    if (_user == null) return;
-    try {
-      await _db.collection('users').doc(_user!.uid).set({
-        'email': _user!.email,
-        'name': _user!.displayName ?? 'Admin User',
-        'role': 'admin',
-        'createdAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      await _fetchUserRole(_user!.uid);
-      notifyListeners();
-    } catch (e) {
-      print("Error becoming admin: $e");
-    }
+  /// Updates the signed-in user's display name (role is left untouched, which
+  /// the Firestore rules require for self-edits).
+  Future<void> updateName(String name) async {
+    if (_user == null || _userModel == null) return;
+    final trimmed = name.trim();
+    await _db.collection('users').doc(_user!.uid).update({'name': trimmed});
+    await _user!.updateDisplayName(trimmed);
+    _userModel = UserModel(
+      id: _userModel!.id,
+      email: _userModel!.email,
+      role: _userModel!.role,
+      name: trimmed,
+      lastActive: _userModel!.lastActive,
+      deviceInfo: _userModel!.deviceInfo,
+      devicePlatform: _userModel!.devicePlatform,
+      lastLocation: _userModel!.lastLocation,
+      isOnline: _userModel!.isOnline,
+    );
+    notifyListeners();
   }
+
+  /// Sends Firebase's password-reset email.
+  Future<void> resetPassword(String email) =>
+      _auth.sendPasswordResetEmail(email: email.trim());
 
   Future<void> logout() async {
     await _auth.signOut();

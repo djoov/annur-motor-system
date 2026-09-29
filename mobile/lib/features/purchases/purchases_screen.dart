@@ -10,13 +10,21 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../ui/desktop_scaffold.dart';
+import '../../ui/app_list.dart';
 import 'purchases_provider.dart';
 import 'purchase_entry_screen.dart';
 import 'purchase_model.dart';
 import '../../core/theme.dart';
 
+final _rupiah = NumberFormat.currency(
+  locale: 'id_ID',
+  symbol: 'Rp ',
+  decimalDigits: 0,
+);
+
+/// Owner-only: purchases from suppliers.
 class PurchasesScreen extends StatefulWidget {
-  const PurchasesScreen({Key? key}) : super(key: key);
+  const PurchasesScreen({super.key});
 
   @override
   State<PurchasesScreen> createState() => _PurchasesScreenState();
@@ -27,57 +35,79 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = Provider.of<PurchasesProvider>(context, listen: false);
-      if (provider.purchases.isEmpty) {
-        provider.fetchPurchases();
-      }
+      final provider = context.read<PurchasesProvider>();
+      if (provider.purchases.isEmpty) provider.fetchPurchases();
     });
+  }
+
+  void _openEntry() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PurchaseEntryScreen()),
+    );
   }
 
   Future<void> _downloadTemplate() async {
     try {
-      // CSV template content
-      const template =
-          'FAKTUR,SUPPLIER,NAMA_BARANG,QTY,HARGA,TANGGAL\n'
+      const template = 'FAKTUR,SUPPLIER,NAMA_BARANG,QTY,HARGA,TANGGAL\n'
           'INV-001,PT Suppliers,Oli Yamalube,10,50000,2025-01-18\n'
           'INV-001,PT Suppliers,Kampas Rem,5,75000,2025-01-18\n'
           'INV-002,PT Honda,Busi NGK,20,25000,2025-01-18';
 
       if (kIsWeb) {
-        // For web, trigger download via blob
         _showMessage("Template tersedia di: template_pembelian.csv");
       } else {
-        // For mobile, save to downloads and share
         final directory = await getApplicationDocumentsDirectory();
         final file = File('${directory.path}/template_pembelian.csv');
         await file.writeAsString(template);
-
-        await Share.shareXFiles([
-          XFile(file.path),
-        ], subject: 'Template Import Pembelian');
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [XFile(file.path)],
+            subject: 'Template Import Pembelian',
+          ),
+        );
       }
     } catch (e) {
-      _showMessage("Error: $e");
+      _showMessage("Gagal membuat template: $e");
     }
   }
 
+  /// Imports purchase HISTORY only (stock is not changed). Rows with the same
+  /// invoice number are grouped into one purchase record.
   Future<void> _importCSV() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Import riwayat pembelian"),
+        content: const Text(
+          "Import CSV hanya menyimpan catatan pembelian lama dan tidak mengubah stok barang. "
+          "Untuk barang yang baru datang, pakai Catat Pembelian.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Batal"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Pilih File CSV"),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
     try {
-      FilePickerResult? result = await FilePicker.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['csv'],
         withData: true,
       );
-
       if (result == null || result.files.isEmpty) return;
 
-      String content;
-      if (kIsWeb) {
-        content = String.fromCharCodes(result.files.first.bytes!);
-      } else {
-        final file = File(result.files.first.path!);
-        content = await file.readAsString();
-      }
+      final content = kIsWeb
+          ? String.fromCharCodes(result.files.first.bytes!)
+          : await File(result.files.first.path!).readAsString();
 
       final rows = Csv().decode(content);
       if (rows.isEmpty) {
@@ -85,71 +115,57 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
         return;
       }
 
-      // Skip header row if exists
-      final dataRows =
-          rows.length > 1 &&
+      final dataRows = rows.length > 1 &&
               rows[0][0].toString().toUpperCase().contains('FAKTUR')
           ? rows.sublist(1)
           : rows;
 
-      final provider = Provider.of<PurchasesProvider>(context, listen: false);
-      int imported = 0;
-      int failed = 0;
+      int toInt(Object? v) =>
+          int.tryParse(v.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
 
-      for (var row in dataRows) {
-        if (row.length < 6)
-          continue; // Must have: Invoice, Supplier, ItemName, Qty, Price, Date
-
-        try {
-          final invoiceNumber = row[0].toString().trim();
-          final supplierName = row[1].toString().trim();
-          final itemName = row[2].toString().trim();
-          final qty =
-              int.tryParse(
-                row[3].toString().replaceAll(RegExp(r'[^0-9]'), ''),
-              ) ??
-              0;
-          final price =
-              int.tryParse(
-                row[4].toString().replaceAll(RegExp(r'[^0-9]'), ''),
-              ) ??
-              0;
-          // Date in column 5 (optional)
-
-          if (invoiceNumber.isEmpty ||
-              supplierName.isEmpty ||
-              itemName.isEmpty) {
-            failed++;
-            continue;
-          }
-
-          final item = PurchaseItem(
-            itemId: '', // Will be matched by name in provider
-            name: itemName,
-            buyPrice: price,
-            quantity: qty,
-          );
-
-          final success = await provider.importPurchase(
-            invoiceNumber: invoiceNumber,
-            supplierName: supplierName,
-            items: [item],
-          );
-
-          if (success) {
-            imported++;
-          } else {
-            failed++;
-          }
-        } catch (e) {
-          failed++;
+      // invoice -> (supplier, items)
+      final grouped = <String, (String, List<PurchaseItem>)>{};
+      int skipped = 0;
+      for (final row in dataRows) {
+        if (row.length < 5) {
+          skipped++;
+          continue;
         }
+        final invoice = row[0].toString().trim();
+        final supplier = row[1].toString().trim();
+        final itemName = row[2].toString().trim();
+        if (invoice.isEmpty || supplier.isEmpty || itemName.isEmpty) {
+          skipped++;
+          continue;
+        }
+        final entry = grouped.putIfAbsent(invoice, () => (supplier, []));
+        entry.$2.add(PurchaseItem(
+          itemId: '',
+          name: itemName,
+          quantity: toInt(row[3]),
+          buyPrice: toInt(row[4]),
+        ));
       }
 
-      _showMessage("Import selesai: $imported berhasil, $failed gagal");
+      if (!mounted) return;
+      final provider = context.read<PurchasesProvider>();
+      int imported = 0;
+      for (final e in grouped.entries) {
+        final okOne = await provider.importPurchase(
+          invoiceNumber: e.key,
+          supplierName: e.value.$1,
+          items: e.value.$2,
+        );
+        if (okOne) imported++;
+      }
+
+      _showMessage(
+        "$imported faktur diimpor"
+        "${skipped > 0 ? ', $skipped baris dilewati' : ''}",
+      );
       provider.fetchPurchases();
     } catch (e) {
-      _showMessage("Error: $e");
+      _showMessage("Import gagal: $e");
     }
   }
 
@@ -161,212 +177,117 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp ',
-      decimalDigits: 0,
+    final fab = FloatingActionButton.extended(
+      onPressed: _openEntry,
+      icon: const Icon(LucideIcons.plus),
+      label: const Text("Catat Pembelian"),
     );
-    final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
 
-    // Desktop Layout
-    if (DesktopScaffold.isDesktop) {
-      return DesktopScaffold(
-        activeRoute: '/purchases',
-        floatingActionButton: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FloatingActionButton(
-              heroTag: 'import',
-              mini: true,
-              onPressed: _importCSV,
-              backgroundColor: Colors.orange,
-              child: const Icon(LucideIcons.fileUp, color: Colors.white),
-            ),
-            const SizedBox(height: 12),
-            FloatingActionButton(
-              heroTag: 'add',
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const PurchaseEntryScreen(),
-                  ),
-                );
-              },
-              backgroundColor: AppColors.primary,
-              child: const Icon(LucideIcons.plus, color: Colors.white),
-            ),
-          ],
-        ),
-        body: Consumer<PurchasesProvider>(
-          builder: (context, provider, child) {
-            return _buildListBody(
-              context,
-              provider,
-              dateFormat,
-              currencyFormat,
-            );
-          },
-        ),
-      );
-    }
-
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: AppBar(
-        title: const Text("Riwayat Pembelian"),
+        title: const Text("Pembelian"),
         actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.download),
-            tooltip: "Download Template CSV",
-            onPressed: _downloadTemplate,
-          ),
-          IconButton(
-            icon: const Icon(LucideIcons.fileUp),
-            tooltip: "Import CSV",
-            onPressed: _importCSV,
-          ),
-          IconButton(
-            icon: const Icon(LucideIcons.plus),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PurchaseEntryScreen(),
-                ),
-              );
+          PopupMenuButton<String>(
+            tooltip: "Lainnya",
+            icon: const Icon(LucideIcons.ellipsisVertical),
+            onSelected: (v) {
+              if (v == 'import') _importCSV();
+              if (v == 'template') _downloadTemplate();
             },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'import',
+                child: ListTile(
+                  leading: Icon(LucideIcons.fileUp),
+                  title: Text("Import riwayat (CSV)"),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'template',
+                child: ListTile(
+                  leading: Icon(LucideIcons.download),
+                  title: Text("Unduh template CSV"),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
           ),
         ],
       ),
+      floatingActionButton: fab,
       body: Consumer<PurchasesProvider>(
-        builder: (context, provider, child) {
-          return _buildListBody(context, provider, dateFormat, currencyFormat);
-        },
+        builder: (context, provider, _) => _buildListBody(provider),
       ),
     );
+
+    if (DesktopScaffold.isDesktop) {
+      return DesktopScaffold(activeRoute: '/purchases', body: scaffold);
+    }
+    return scaffold;
   }
 
-  Widget _buildListBody(
-    BuildContext context,
-    PurchasesProvider provider,
-    DateFormat dateFormat,
-    NumberFormat currencyFormat,
-  ) {
+  Widget _buildListBody(PurchasesProvider provider) {
     if (provider.isLoading && provider.purchases.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator.adaptive());
     }
 
     if (provider.purchases.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              LucideIcons.archive,
-              size: 64,
-              color: AppColors.mutedForeground,
-            ),
-            const SizedBox(height: 16),
-            const Text("Belum ada data pembelian"),
-            const SizedBox(height: 16),
-            TextButton.icon(
-              onPressed: _importCSV,
-              icon: const Icon(LucideIcons.fileUp),
-              label: const Text("Import dari CSV"),
-            ),
-          ],
-        ),
+      return AppEmptyState(
+        icon: LucideIcons.packagePlus,
+        title: "Belum ada pembelian",
+        message: "Catat barang yang datang dari supplier. Stok otomatis bertambah.",
+        actionLabel: "Catat Pembelian",
+        onAction: _openEntry,
       );
     }
 
     return RefreshIndicator(
       onRefresh: provider.fetchPurchases,
       child: ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         itemCount: provider.purchases.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
           final purchase = provider.purchases[index];
-          return Card(
-            elevation: 0,
+          return Material(
+            color: AppColors.surface,
+            clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(16),
               side: const BorderSide(color: AppColors.border),
             ),
             child: ExpansionTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  LucideIcons.receipt,
-                  color: AppColors.primary,
-                ),
-              ),
-              title: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      purchase.supplierName,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      "#${purchase.invoiceNumber}",
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
+              shape: const Border(),
+              collapsedShape: const Border(),
+              title: Text(
+                purchase.supplierName,
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
-                dateFormat.format(purchase.date),
-                style: const TextStyle(fontSize: 12),
+                "${DateFormat('d MMM yyyy', 'id_ID').format(purchase.date)} · #${purchase.invoiceNumber}",
               ),
               trailing: Text(
-                currencyFormat.format(purchase.total),
+                _rupiah.format(purchase.total),
                 style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: [FontFeature.tabularFigures()],
                 ),
               ),
               children: [
-                Container(
-                  color: AppColors.surface,
-                  child: Column(
-                    children: [
-                      ...purchase.items.map(
-                        (item) => ListTile(
-                          visualDensity: VisualDensity.compact,
-                          title: Text(item.name),
-                          subtitle: Text(
-                            "${item.quantity} x ${currencyFormat.format(item.buyPrice)}",
-                          ),
-                          trailing: Text(
-                            currencyFormat.format(
-                              item.quantity * item.buyPrice,
-                            ),
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ),
-                    ],
+                for (final item in purchase.items)
+                  ListTile(
+                    dense: true,
+                    title: Text(item.name),
+                    subtitle: Text(
+                      "${item.quantity} × ${_rupiah.format(item.buyPrice)}",
+                    ),
+                    trailing: Text(
+                      _rupiah.format(item.quantity * item.buyPrice),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ),
-                ),
               ],
             ),
           );

@@ -8,6 +8,10 @@ class StockOpnameProvider with ChangeNotifier {
   List<StockOpname> _history = [];
   bool _isLoading = false;
 
+  StockOpnameProvider() {
+    fetchHistory();
+  }
+
   List<StockOpname> get history => _history;
   bool get isLoading => _isLoading;
 
@@ -21,16 +25,27 @@ class StockOpnameProvider with ChangeNotifier {
 
     _db
         .collection('stock_opnames')
-        .orderBy('date', descending: true)
-        .limit(20)
         .snapshots()
-        .listen((snapshot) {
-          _history = snapshot.docs
-              .map((doc) => StockOpname.fromFirestore(doc))
-              .toList();
-          _isLoading = false;
-          notifyListeners();
-        });
+        .listen(
+          (snapshot) {
+            _history = snapshot.docs.map((doc) {
+              try {
+                return StockOpname.fromFirestore(doc);
+              } catch (e) {
+                print("Error parsing stock opname ${doc.id}: $e");
+                return null;
+              }
+            }).whereType<StockOpname>().toList()
+              ..sort((a, b) => b.date.compareTo(a.date));
+            _isLoading = false;
+            notifyListeners();
+          },
+          onError: (e) {
+            print("Error listening to stock opnames: $e");
+            _isLoading = false;
+            notifyListeners();
+          },
+        );
   }
 
   void startNewOpname() {
@@ -90,27 +105,40 @@ class StockOpnameProvider with ChangeNotifier {
         note: note,
       );
 
-      final batch = _db.batch();
+      final changed = _activeItems.where((i) => i.difference != 0).toList();
 
-      // 1. Save Opname Record
-      batch.set(opnameRef, opname.toMap());
+      // Save the record and apply the counted difference atomically. Applying
+      // the difference to the *current* stock keeps any sales made between
+      // counting and finalizing. Writes the real stock fields (`stock` +
+      // mirrored `qty_display`) — the old code wrote an unused `stockDisplay`
+      // field, so adjustments never reached the shop's stock.
+      await _db.runTransaction((tx) async {
+        final snaps = <String, DocumentSnapshot<Map<String, dynamic>>>{};
+        for (final item in changed) {
+          snaps[item.itemId] =
+              await tx.get(_db.collection('items').doc(item.itemId));
+        }
 
-      // 2. Adjust Stock in Items Collection
-      for (var item in _activeItems) {
-        if (item.difference != 0) {
-          final itemRef = _db.collection('items').doc(item.itemId);
-          // Assuming we are adjusting DISPLAY stock for now.
-          // Ideally, we might need to select which stock (warehouse vs display),
-          // but usually opname is done on display first.
-          // Let's increment by difference (difference can be negative)
-          batch.update(itemRef, {
-            'stockDisplay': FieldValue.increment(item.difference),
+        tx.set(opnameRef, opname.toMap());
+
+        for (final item in changed) {
+          final snap = snaps[item.itemId]!;
+          if (!snap.exists) continue;
+          final data = snap.data()!;
+          final current =
+              ((data['stock'] ?? data['qty_display'] ?? data['qty_warehouse'])
+                          as num?)
+                      ?.toInt() ??
+                  0;
+          final updated = (current + item.difference).clamp(0, 1 << 31);
+          tx.update(snap.reference, {
+            'stock': updated,
+            'qty_display': updated,
             'lastOpnameDate': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
           });
         }
-      }
-
-      await batch.commit();
+      });
 
       _activeItems = []; // Clear
     } catch (e) {

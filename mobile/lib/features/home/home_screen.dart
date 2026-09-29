@@ -1,75 +1,107 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../core/theme.dart';
+import '../../ui/duo_icon.dart';
+import '../../ui/bottom_nav_metrics.dart';
 import '../auth/auth_provider.dart';
+import '../auth/user_provider.dart';
 import '../items/items_provider.dart';
 import '../history/history_provider.dart';
 import '../dashboard/dashboard_provider.dart';
+import '../stock_request/stock_request_provider.dart';
 
 // Screens
 import '../pos/pos_screen.dart';
 import '../items/items_list_screen.dart';
+import '../items/bulk_import_screen.dart';
 import '../categories/categories_list_screen.dart';
 import '../customers/customers_list_screen.dart';
-import '../suppliers/suppliers_list_screen.dart';
-import '../history/history_screen.dart';
 import '../debts/debts_list_screen.dart';
+import '../suppliers/suppliers_list_screen.dart';
 import '../purchases/purchases_screen.dart';
-import '../settings/settings_screen.dart';
-import '../stock_opname/stock_opname_list_screen.dart';
-import '../reports/low_stock_report_screen.dart';
-import '../reports/daily_sales/daily_sales_screen.dart';
-import '../auth/users_list_screen.dart';
 import '../stock_request/stock_request_screen.dart';
+import '../stock_opname/stock_opname_list_screen.dart';
+import '../history/history_screen.dart';
+import '../settings/settings_screen.dart';
+import '../reports/daily_sales/daily_sales_screen.dart';
+import '../reports/low_stock_report_screen.dart';
 import '../scan/scan_screen.dart';
 import '../profile/profile_screen.dart';
-import '../dashboard/widgets/weekly_revenue_chart.dart';
+import '../auth/users_list_screen.dart';
+
+const _tabular = [FontFeature.tabularFigures()];
+
+final _rupiah = NumberFormat.currency(
+  locale: 'id_ID',
+  symbol: 'Rp ',
+  decimalDigits: 0,
+);
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // 0 Beranda · 1 Produk · 2 Kasir · 3 Riwayat · 4 Setelan
   int _selectedIndex = 0;
-
-  // Mandiri-like Color Palette
-  static const Color mandiriBlueDark = Color(0xFF003D79);
-  static const Color mandiriBlueLight = Color(0xFF005C9F);
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
   void _loadData() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<ItemsProvider>(context, listen: false).fetchItems();
-      Provider.of<HistoryProvider>(context, listen: false).fetchTransactions();
-      Provider.of<DashboardProvider>(context, listen: false).fetchStats();
-    });
+    context.read<ItemsProvider>().fetchItems();
+    context.read<HistoryProvider>().fetchTransactions();
+    context.read<DashboardProvider>().fetchStats();
+    if (context.read<AuthProvider>().isAdmin) {
+      context.read<UserProvider>().fetchUsers();
+    }
+  }
+
+  void _selectTab(int index) => setState(() => _selectedIndex = index);
+
+  void _open(Widget screen) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F9),
-      body: _buildBody(),
-      bottomNavigationBar: _buildBottomNav(),
-      extendBody: true,
+    return PopScope(
+      canPop: _selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _selectedIndex != 0) _selectTab(0);
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: Stack(
+          children: [
+            _buildBody(),
+            Positioned(
+              bottom: BottomNavMetrics.bottomOffset(context),
+              left: 16,
+              right: 16,
+              child: _BottomNav(
+                selectedIndex: _selectedIndex,
+                onSelect: _selectTab,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildBody() {
     switch (_selectedIndex) {
-      case 0:
-        return _buildHomeContent();
       case 1:
         return const ItemsListScreen(showBackButton: false);
       case 2:
@@ -79,661 +111,452 @@ class _HomeScreenState extends State<HomeScreen> {
       case 4:
         return const SettingsScreen();
       default:
-        return _buildHomeContent();
+        return _BerandaContent(
+          onSelectTab: _selectTab,
+          onOpen: _open,
+          onRefresh: _loadData,
+        );
     }
   }
+}
 
-  Widget _buildHomeContent() {
-    final authProvider = Provider.of<AuthProvider>(context);
-    final itemsProvider = Provider.of<ItemsProvider>(context);
-    final historyProvider = Provider.of<HistoryProvider>(context);
-    final dashboardProvider = Provider.of<DashboardProvider>(context);
-    final currencyFormat = NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp ',
-      decimalDigits: 0,
-    );
+// ===========================================================================
+// BERANDA
+// ===========================================================================
 
-    // Calculate today's sales
-    final today = DateTime.now();
-    final todaySales = historyProvider.transactions
-        .where(
-          (t) =>
-              t.date.year == today.year &&
-              t.date.month == today.month &&
-              t.date.day == today.day,
-        )
-        .toList();
-    final todayTotal = todaySales.fold<int>(0, (sum, t) => sum + t.totalAmount);
-    final todayCount = todaySales.length;
+class _BerandaContent extends StatelessWidget {
+  final ValueChanged<int> onSelectTab;
+  final ValueChanged<Widget> onOpen;
+  final VoidCallback onRefresh;
 
-    return CustomScrollView(
-      slivers: [
-        // Merged Header & Summary Card Section
-        SliverToBoxAdapter(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth >= 600) {
-                return _buildTabletHeader(
-                  authProvider,
-                  currencyFormat,
-                  todayTotal,
-                  todayCount,
-                  itemsProvider,
-                );
-              }
-              return _buildHeaderAndSummarySection(
-                authProvider,
-                currencyFormat,
-                todayTotal,
-                todayCount,
-                itemsProvider,
-              );
-            },
-          ),
-        ),
+  const _BerandaContent({
+    required this.onSelectTab,
+    required this.onOpen,
+    required this.onRefresh,
+  });
 
-        // Menu Grid
-        SliverToBoxAdapter(child: _buildMenuSection(authProvider)),
+  @override
+  Widget build(BuildContext context) {
+    final isAdmin = context.watch<AuthProvider>().isAdmin;
 
-        // Weekly Revenue Chart (New)
-        SliverToBoxAdapter(child: _buildChartSection(dashboardProvider)),
-
-        // Low Stock Alert
-        if (itemsProvider.lowStockDisplayItems.isNotEmpty)
-          SliverToBoxAdapter(
-            child: _buildAlertCard(itemsProvider.lowStockDisplayItems.length),
-          ),
-
-        const SliverToBoxAdapter(child: SizedBox(height: 120)),
-      ],
-    );
-  }
-
-  Widget _buildChartSection(DashboardProvider dashboard) {
-    // Only show on Tablet/Desktop
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (MediaQuery.of(context).size.width < 600) {
-          return const SizedBox.shrink();
-        }
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Tren Penjualan (7 Hari)',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: mandiriBlueDark,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () async {
+          onRefresh();
+          await Future.delayed(const Duration(milliseconds: 600));
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _SalesHeader(
+                        isAdmin: isAdmin,
+                        onOpenProfile: () => onOpen(const ProfileScreen()),
                       ),
-                    ),
-                    Icon(
-                      LucideIcons.barChart2,
-                      color: Colors.grey[400],
-                      size: 20,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                dashboard.isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : WeeklyRevenueChart(weeklyData: dashboard.weeklyRevenue),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildHeaderAndSummarySection(
-    AuthProvider auth,
-    NumberFormat currency,
-    int todayTotal,
-    int todayCount,
-    ItemsProvider itemsProvider,
-  ) {
-    return Stack(
-      children: [
-        // 1. Blue Header Background (Underneath)
-        Container(
-          height: 250, // Fixed height for background
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [mandiriBlueDark, mandiriBlueLight],
-            ),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(30),
-              bottomRight: Radius.circular(30),
-            ),
-          ),
-          child: Stack(
-            children: [
-              // Decorative Circles
-              Positioned(
-                top: -50,
-                right: -50,
-                child: Container(
-                  width: 150,
-                  height: 150,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    shape: BoxShape.circle,
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _QuickActions(
+                              isAdmin: isAdmin,
+                              onOpen: onOpen,
+                              onShowAllMenu: () => _showAllMenu(context),
+                            ),
+                            const SizedBox(height: 28),
+                            _AttentionSection(isAdmin: isAdmin, onOpen: onOpen),
+                            const SizedBox(height: 28),
+                            _RecentTransactions(
+                              onSeeAll: () => onSelectTab(3),
+                            ),
+                            // Space for the floating bottom nav
+                            const SizedBox(height: 128),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ),
-              Positioned(
-                bottom: 20,
-                left: -30,
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // 2. Foreground Content (User Info + Card)
-        Column(
-          children: [
-            // User Info Section
-            SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-                child: Column(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Avatar
-                        GestureDetector(
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const ProfileScreen(),
-                            ),
-                          ),
-                          child: Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.3),
-                                width: 2,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Center(
-                              child: Text(
-                                (auth.userModel?.name ?? 'U')[0].toUpperCase(),
-                                style: const TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                  color: mandiriBlueDark,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        // User Info
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                "Selamat Pagi,",
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              Text(
-                                auth.userModel?.name ?? 'User',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Actions
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: IconButton(
-                            onPressed: () => _navigateTo(const ScanScreen()),
-                            icon: const Icon(
-                              LucideIcons.scan,
-                              color: Colors.white,
-                            ),
-                            tooltip: "Scan Barcode",
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: IconButton(
-                            onPressed: () =>
-                                _navigateTo(const SettingsScreen()),
-                            icon: const Icon(
-                              LucideIcons.settings,
-                              color: Colors.white,
-                            ),
-                            tooltip: "Pengaturan",
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 10), // Spacing between Header and Card
-            // Floating Summary Card
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: mandiriBlueDark.withOpacity(0.1),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    // Top Section: Sales
-                    Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: mandiriBlueLight.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              LucideIcons.wallet,
-                              color: mandiriBlueDark,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Penjualan Hari Ini',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  currency.format(todayTotal),
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: mandiriBlueDark,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: Colors.green.shade100,
-                                  ),
-                                ),
-                                child: Text(
-                                  "$todayCount Trx",
-                                  style: TextStyle(
-                                    color: Colors.green.shade700,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    // Bottom Section: Quick Stats
-                    SizedBox(
-                      height: 50,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: InkWell(
-                              onTap: () => _navigateTo(const ItemsListScreen()),
-                              borderRadius: const BorderRadius.only(
-                                bottomLeft: Radius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(
-                                    LucideIcons.package,
-                                    size: 16,
-                                    color: Colors.grey,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    "${itemsProvider.items.length} Barang",
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Container(width: 1, color: Colors.grey.shade200),
-                          Expanded(
-                            child: InkWell(
-                              onTap: () =>
-                                  _navigateTo(const LowStockReportScreen()),
-                              borderRadius: const BorderRadius.only(
-                                bottomRight: Radius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    LucideIcons.alertTriangle,
-                                    size: 16,
-                                    color:
-                                        itemsProvider
-                                            .lowStockDisplayItems
-                                            .isNotEmpty
-                                        ? Colors.orange
-                                        : Colors.grey,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    "${itemsProvider.lowStockDisplayItems.length} Menipis",
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color:
-                                          itemsProvider
-                                              .lowStockDisplayItems
-                                              .isNotEmpty
-                                          ? Colors.orange
-                                          : Colors.grey,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ),
           ],
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildTabletHeader(
-    AuthProvider auth,
-    NumberFormat currency,
-    int todayTotal,
-    int todayCount,
-    ItemsProvider itemsProvider,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [mandiriBlueDark, mandiriBlueLight],
+  void _showAllMenu(BuildContext context) {
+    final isAdmin = context.read<AuthProvider>().isAdmin;
+    final pendingUsers = _pendingUserCount(context.read<UserProvider>());
+
+    void go(Widget screen) {
+      Navigator.pop(context);
+      onOpen(screen);
+    }
+
+    void tab(int index) {
+      Navigator.pop(context);
+      onSelectTab(index);
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.8,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) => ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 32),
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                "Semua Menu",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.foreground,
+                ),
+              ),
+            ),
+            const _MenuGroupTitle("Penjualan"),
+            _MenuTile(
+              icon: DuoIcons.history,
+              label: "Riwayat Transaksi",
+              onTap: () => tab(3),
+            ),
+            if (isAdmin)
+              _MenuTile(
+                icon: DuoIcons.chart,
+                label: "Laporan Penjualan",
+                onTap: () => go(DailySalesScreen()),
+              ),
+            _MenuTile(
+              icon: DuoIcons.users,
+              label: "Pelanggan",
+              onTap: () => go(const CustomersListScreen()),
+            ),
+            _MenuTile(
+              icon: DuoIcons.wallet,
+              label: "Hutang Pelanggan",
+              onTap: () => go(const DebtsListScreen()),
+            ),
+            const _MenuGroupTitle("Barang & Stok"),
+            _MenuTile(
+              icon: DuoIcons.package,
+              label: "Daftar Produk",
+              onTap: () => tab(1),
+            ),
+            _MenuTile(
+              icon: DuoIcons.scan,
+              label: "Scan Cek Harga",
+              onTap: () => go(const ScanScreen()),
+            ),
+            _MenuTile(
+              icon: DuoIcons.category,
+              label: "Kategori",
+              onTap: () => go(const CategoriesListScreen()),
+            ),
+            _MenuTile(
+              icon: DuoIcons.lowStock,
+              label: "Stok Menipis",
+              onTap: () => go(const LowStockReportScreen()),
+            ),
+            _MenuTile(
+              icon: DuoIcons.stockRequest,
+              label: "Permintaan Stok",
+              onTap: () => go(const StockRequestScreen()),
+            ),
+            _MenuTile(
+              icon: DuoIcons.opname,
+              label: "Stock Opname",
+              onTap: () => go(const StockOpnameListScreen()),
+            ),
+            const _MenuGroupTitle("Pembelian"),
+            _MenuTile(
+              icon: DuoIcons.supplier,
+              label: "Supplier",
+              onTap: () => go(const SuppliersListScreen()),
+            ),
+            if (isAdmin) ...[
+              _MenuTile(
+                icon: DuoIcons.purchase,
+                label: "Pembelian Barang",
+                onTap: () => go(const PurchasesScreen()),
+              ),
+              _MenuTile(
+                icon: DuoIcons.import,
+                label: "Import Barang (CSV)",
+                onTap: () => go(const BulkImportScreen()),
+              ),
+            ],
+            const _MenuGroupTitle("Akun & Aplikasi"),
+            if (isAdmin)
+              _MenuTile(
+                icon: DuoIcons.userAdmin,
+                label: "Kelola Pengguna",
+                badge: pendingUsers > 0 ? "$pendingUsers baru" : null,
+                onTap: () => go(const UsersListScreen()),
+              ),
+            _MenuTile(
+              icon: DuoIcons.user,
+              label: "Profil Saya",
+              onTap: () => go(const ProfileScreen()),
+            ),
+            _MenuTile(
+              icon: DuoIcons.settings,
+              label: "Pengaturan & Printer",
+              onTap: () => tab(4),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+int _pendingUserCount(UserProvider users) => users.users
+    .where((u) => u.role != 'admin' && u.role != 'staff')
+    .length;
+
+// ---------------------------------------------------------------------------
+// Header: logo-navy block with today's sales in logo yellow
+// ---------------------------------------------------------------------------
+
+class _SalesHeader extends StatelessWidget {
+  final bool isAdmin;
+  final VoidCallback onOpenProfile;
+
+  const _SalesHeader({required this.isAdmin, required this.onOpenProfile});
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final dashboard = context.watch<DashboardProvider>();
+    final topInset = MediaQuery.of(context).padding.top;
+
+    final userName = auth.userModel?.name ?? '';
+    final initial = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
+    final dateText = DateFormat('EEEE, d MMMM', 'id_ID').format(DateTime.now());
+
+    final yesterdayKey = DateFormat('yyyy-MM-dd')
+        .format(DateTime.now().subtract(const Duration(days: 1)));
+    final yesterdaySales = dashboard.weeklyRevenue[yesterdayKey]?.toInt();
+
+    final onHeaderMuted = TextStyle(
+      fontSize: 14,
+      color: Colors.white.withValues(alpha: 0.78),
+      fontFeatures: _tabular,
+    );
+
+    final isFirstLoad = dashboard.isLoading && dashboard.transactionCount == 0;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, topInset + 16, 12, 28),
+      decoration: const BoxDecoration(
+        color: AppColors.brandNavy,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row (User & Settings)
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: Colors.white,
-                    child: Text(
-                      (auth.userModel?.name ?? 'U')[0].toUpperCase(),
-                      style: const TextStyle(
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Annur Motor",
+                      style: TextStyle(
                         fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: mandiriBlueDark,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "Selamat Pagi,",
-                        style: TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                      Text(
-                        auth.userModel?.name ?? "Admin User",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      userName.isNotEmpty ? "$dateText · $userName" : dateText,
+                      style: onHeaderMuted.copyWith(fontSize: 13),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () => _navigateTo(const ScanScreen()),
-                    icon: const Icon(LucideIcons.scan, color: Colors.white),
+              IconButton(
+                onPressed: onOpenProfile,
+                tooltip: "Profil",
+                iconSize: 44,
+                icon: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: AppColors.brandYellow,
+                  child: Text(
+                    initial,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.brandNavy,
+                    ),
                   ),
-                  IconButton(
-                    onPressed: () => _navigateTo(const SettingsScreen()),
-                    icon: const Icon(LucideIcons.settings, color: Colors.white),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 32),
-
-          // Dashboard Summary Cards (Row of 3)
-          Row(
+          const SizedBox(height: 24),
+          Text("Penjualan hari ini", style: onHeaderMuted),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                isFirstLoad ? "Rp —" : _rupiah.format(dashboard.totalSales),
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.brandYellow,
+                  height: 1.15,
+                  fontFeatures: _tabular,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 16,
+            runSpacing: 4,
             children: [
-              // 1. Sales Card
-              Expanded(
-                child: _buildSummaryCard(
-                  title: "Penjualan Hari Ini",
-                  value: currency.format(todayTotal),
-                  icon: LucideIcons.wallet,
-                  color: Colors.green,
-                  badge: "$todayCount Trx",
+              Text("${dashboard.transactionCount} transaksi", style: onHeaderMuted),
+              // Profit & comparisons are owner-only information
+              if (isAdmin)
+                Text(
+                  "Laba ${_rupiah.format(dashboard.todayProfit)}",
+                  style: onHeaderMuted,
                 ),
-              ),
-              const SizedBox(width: 16),
-              // 2. Items Card
-              Expanded(
-                child: _buildSummaryCard(
-                  title: "Total Barang",
-                  value: "${itemsProvider.items.length}",
-                  icon: LucideIcons.package,
-                  color: Colors.blue,
-                  onTap: () => _navigateTo(const ItemsListScreen()),
+              if (isAdmin && yesterdaySales != null)
+                Text(
+                  "Kemarin ${_rupiah.format(yesterdaySales)}",
+                  style: onHeaderMuted,
                 ),
-              ),
-              const SizedBox(width: 16),
-              // 3. Low Stock Card
-              Expanded(
-                child: _buildSummaryCard(
-                  title: "Stok Menipis",
-                  value: "${itemsProvider.lowStockDisplayItems.length}",
-                  icon: LucideIcons.alertTriangle,
-                  color: Colors.orange,
-                  onTap: () => _navigateTo(const LowStockReportScreen()),
-                  isDestructive: itemsProvider.lowStockDisplayItems.isNotEmpty,
-                ),
-              ),
             ],
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildSummaryCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color color,
-    String? badge,
-    VoidCallback? onTap,
-    bool isDestructive = false,
-  }) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      elevation: 2,
+// ---------------------------------------------------------------------------
+// Quick actions (Kasir lives in the bottom nav, so it is not repeated here)
+// ---------------------------------------------------------------------------
+
+class _QuickActions extends StatelessWidget {
+  final bool isAdmin;
+  final ValueChanged<Widget> onOpen;
+  final VoidCallback onShowAllMenu;
+
+  const _QuickActions({
+    required this.isAdmin,
+    required this.onOpen,
+    required this.onShowAllMenu,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _QuickAction(
+          icon: DuoIcons.scan,
+          label: "Cek Harga",
+          onTap: () => onOpen(const ScanScreen()),
+        ),
+        _QuickAction(
+          icon: DuoIcons.users,
+          label: "Pelanggan",
+          onTap: () => onOpen(const CustomersListScreen()),
+        ),
+        isAdmin
+            ? _QuickAction(
+                icon: DuoIcons.chart,
+                label: "Laporan",
+                onTap: () => onOpen(DailySalesScreen()),
+              )
+            : _QuickAction(
+                icon: DuoIcons.stockRequest,
+                label: "Minta Stok",
+                onTap: () => onOpen(const StockRequestScreen()),
+              ),
+        _QuickAction(
+          icon: DuoIcons.grid,
+          label: "Semua Menu",
+          onTap: onShowAllMenu,
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  final DuoIcons icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: isDestructive
-                ? Border.all(color: Colors.red.shade200)
-                : null,
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(icon, color: color, size: 20),
-                  ),
-                  if (badge != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        badge,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.green.shade700,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
+              DuoIconTile(icon, size: 56),
+              const SizedBox(height: 8),
               Text(
-                title,
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: isDestructive ? Colors.red : AppColors.primary,
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.foreground,
+                  height: 1.2,
                 ),
               ),
             ],
@@ -742,428 +565,663 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
 
-  Widget _buildMenuSection(AuthProvider auth) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            ),
-          ],
+// ---------------------------------------------------------------------------
+// "Perlu perhatian" — only things that need action today
+// ---------------------------------------------------------------------------
+
+class _AttentionSection extends StatelessWidget {
+  final bool isAdmin;
+  final ValueChanged<Widget> onOpen;
+
+  const _AttentionSection({required this.isAdmin, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = context.watch<ItemsProvider>();
+    final dashboard = context.watch<DashboardProvider>();
+    final stockRequests = context.watch<StockRequestProvider>();
+    final users = context.watch<UserProvider>();
+
+    final lowStock = items.lowStockDisplayItems;
+    final outOfStock = lowStock.where((i) => i.stockDisplay <= 0).length;
+    final almostOut = lowStock.length - outOfStock;
+    final pendingRequests = isAdmin ? stockRequests.pendingCount : 0;
+    final pendingUsers = isAdmin ? _pendingUserCount(users) : 0;
+    final unpaidDebt = isAdmin ? dashboard.totalUnpaidDebt : 0;
+
+    final rows = <Widget>[
+      if (lowStock.isNotEmpty)
+        _AttentionRow(
+          icon: LucideIcons.triangleAlert,
+          color: outOfStock > 0 ? AppColors.destructive : AppColors.warning,
+          title: "${lowStock.length} barang stok menipis",
+          subtitle: [
+            if (outOfStock > 0) "$outOfStock habis",
+            if (almostOut > 0) "$almostOut sisa ≤ 5",
+          ].join(" · "),
+          onTap: () => onOpen(const LowStockReportScreen()),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Menu Utama',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: mandiriBlueDark,
-                    ),
-                  ),
-                  // Optional: Add settings button like Livin
-                  // Icon(LucideIcons.settings2, color: mandiriBlueDark, size: 20),
-                ],
-              ),
-            ),
-            // Menu Grid
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
-              child: _buildMenuGrid(auth),
-            ),
-          ],
+      if (pendingRequests > 0)
+        _AttentionRow(
+          icon: LucideIcons.packagePlus,
+          color: AppColors.primary,
+          title: "$pendingRequests permintaan stok",
+          subtitle: "Menunggu persetujuan Anda",
+          onTap: () => onOpen(const StockRequestScreen()),
         ),
-      ),
-    );
-  }
-
-  Widget _buildMenuGrid(AuthProvider auth) {
-    final menus = _getMenuItems(auth);
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Responsive columns: Livin style
-        int crossAxisCount = 5; // Default phone
-        if (constraints.maxWidth >= 600)
-          crossAxisCount = 8; // Tablet (Smaller cards)
-        if (constraints.maxWidth >= 900)
-          crossAxisCount = 9; // Large tablet/Desktop
-        if (constraints.maxWidth < 400) crossAxisCount = 4; // Small phone
-        if (constraints.maxWidth < 320) crossAxisCount = 3; // Very small
-
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            childAspectRatio: 0.85,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 16,
-          ),
-          itemCount: menus.length,
-          itemBuilder: (context, index) {
-            final menu = menus[index];
-            return _buildMenuItem(
-              icon: menu['icon'] as IconData,
-              label: menu['label'] as String,
-              color: menu['color'] as Color,
-              onTap: () => _navigateTo(menu['screen'] as Widget),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  List<Map<String, dynamic>> _getMenuItems(AuthProvider auth) {
-    // Distinct colors for visual separation
-    final items = <Map<String, dynamic>>[
-      {
-        'icon': LucideIcons.shoppingCart,
-        'label': 'Kasir',
-        'color': const Color(0xFF00C853), // Vivid Green
-        'screen': const PosScreen(),
-      },
-      {
-        'icon': LucideIcons.package,
-        'label': 'Barang',
-        'color': const Color(0xFF2962FF), // Vivid Blue
-        'screen': const ItemsListScreen(),
-      },
-      {
-        'icon': LucideIcons.users,
-        'label': 'Pelanggan',
-        'color': const Color(0xFFFF6D00), // Vivid Orange
-        'screen': const CustomersListScreen(),
-      },
-      {
-        'icon': LucideIcons.history,
-        'label': 'Riwayat',
-        'color': const Color(0xFF5D4037), // Brown
-        'screen': const HistoryScreen(),
-      },
-      {
-        'icon': LucideIcons.wallet,
-        'label': 'Hutang',
-        'color': const Color(0xFFD50000), // Red
-        'screen': const DebtsListScreen(),
-      },
-      {
-        'icon': LucideIcons.layoutGrid,
-        'label': 'Kategori',
-        'color': const Color(0xFF00B8D4), // Cyan
-        'screen': const CategoriesListScreen(),
-      },
-      {
-        'icon': LucideIcons.clipboardList,
-        'label': 'Permintaan',
-        'color': const Color(0xFF455A64), // Blue Grey
-        'screen': const StockRequestScreen(),
-      },
-      {
-        'icon': LucideIcons.clipboardCheck,
-        'label': 'Opname',
-        'color': const Color(0xFF304FFE), // Indigo
-        'screen': const StockOpnameListScreen(),
-      },
-      {
-        'icon': LucideIcons.fileBarChart2,
-        'label': 'Laporan',
-        'color': const Color(0xFF00695C), // Teal
-        'screen': DailySalesScreen(),
-      },
-      {
-        'icon': LucideIcons.scan,
-        'label': 'Scan QR',
-        'color': const Color(0xFFAA00FF), // Purple
-        'screen': const ScanScreen(),
-      },
-      {
-        'icon': LucideIcons.alertTriangle,
-        'label': 'Stok Tipis',
-        'color': const Color(0xFFC51162), // Pink
-        'screen': const LowStockReportScreen(),
-      },
+      if (pendingUsers > 0)
+        _AttentionRow(
+          icon: LucideIcons.shieldCheck,
+          color: AppColors.primary,
+          title: "$pendingUsers akun baru",
+          subtitle: "Setujui agar bisa memakai aplikasi",
+          onTap: () => onOpen(const UsersListScreen()),
+        ),
+      if (unpaidDebt > 0)
+        _AttentionRow(
+          icon: LucideIcons.wallet,
+          color: AppColors.warning,
+          title: "Piutang belum lunas",
+          subtitle: _rupiah.format(unpaidDebt),
+          onTap: () => onOpen(const DebtsListScreen()),
+        ),
     ];
 
-    // Admin only items
-    if (auth.isAdmin) {
-      items.addAll([
-        {
-          'icon': LucideIcons.truck,
-          'label': 'Supplier',
-          'color': const Color(0xFF6200EA), // Deep Purple
-          'screen': const SuppliersListScreen(),
-        },
-        {
-          'icon': LucideIcons.archive,
-          'label': 'Pembelian',
-          'color': const Color(0xFF64DD17), // Light Green
-          'screen': const PurchasesScreen(),
-        },
-        {
-          'icon': LucideIcons.userCog,
-          'label': 'Admin',
-          'color': const Color(0xFF263238), // Dark Blue Grey
-          'screen': const UsersListScreen(),
-        },
-      ]);
-    }
-
-    return items;
-  }
-
-  Widget _buildMenuItem({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    // Livin style: soft blue background for all icons
-    const softBlue = Color(0xFFE8F4FD);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Icon container with soft blue background
-          Container(
-            width: 52,
-            height: 52,
-            decoration: const BoxDecoration(
-              color: softBlue,
-              shape: BoxShape.circle,
-            ),
-            child: Center(child: Icon(icon, color: color, size: 24)),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: AppColors.primary,
-              height: 1.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAlertCard(int lowStockCount) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _navigateTo(const LowStockReportScreen()),
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  const Color(0xFFFF6D00),
-                  const Color(0xFFFF9100).withOpacity(0.9),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _SectionTitle("Perlu perhatian"),
+        const SizedBox(height: 12),
+        _Panel(
+          children: rows.isNotEmpty
+              ? rows
+              : const [
+                  _AttentionRow(
+                    icon: LucideIcons.circleCheck,
+                    color: AppColors.success,
+                    title: "Semua aman",
+                    subtitle: "Tidak ada stok menipis atau yang perlu disetujui",
+                  ),
                 ],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.orange.withOpacity(0.2),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    LucideIcons.alertTriangle,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Peringatan Stok!',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      Text(
-                        '$lowStockCount barang perlu restock segera',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(
-                  LucideIcons.chevronRight,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
         ),
-      ),
+      ],
     );
   }
+}
 
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
-          ),
-        ],
-      ),
-      child: SafeArea(
+class _AttentionRow extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+
+  const _AttentionRow({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 64),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildBottomNavItem(
-                icon: LucideIcons.home,
-                label: 'Beranda',
-                index: 0,
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 20, color: color),
               ),
-              _buildBottomNavItem(
-                icon: LucideIcons.package,
-                label: 'Barang',
-                index: 1,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.foreground,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.mutedForeground,
+                        fontFeatures: _tabular,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              _buildCenterNavItem(),
-              _buildBottomNavItem(
-                icon: LucideIcons.barChart3,
-                label: 'Laporan',
-                index: 3,
-              ),
-              _buildBottomNavItem(
-                icon: LucideIcons.settings,
-                label: 'Pengaturan',
-                index: 4,
-              ),
+              if (onTap != null)
+                const Icon(
+                  LucideIcons.chevronRight,
+                  size: 20,
+                  color: AppColors.mutedForeground,
+                ),
             ],
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildBottomNavItem({
-    required IconData icon,
-    required String label,
-    required int index,
-  }) {
-    final isSelected = _selectedIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = index),
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 60,
+// ---------------------------------------------------------------------------
+// Recent transactions (live, last 5 from the past 7 days)
+// ---------------------------------------------------------------------------
+
+class _RecentTransactions extends StatelessWidget {
+  final VoidCallback onSeeAll;
+
+  const _RecentTransactions({required this.onSeeAll});
+
+  static String _paymentLabel(String method) {
+    switch (method.toLowerCase()) {
+      case 'cash':
+      case 'tunai':
+        return 'Tunai';
+      case 'transfer':
+        return 'Transfer';
+      case 'qris':
+        return 'QRIS';
+      case 'debt':
+      case 'hutang':
+      case 'credit':
+        return 'Hutang';
+      default:
+        return method.isEmpty
+            ? '-'
+            : method[0].toUpperCase() + method.substring(1);
+    }
+  }
+
+  static String _timeLabel(DateTime date) {
+    final now = DateTime.now();
+    final isToday =
+        date.year == now.year && date.month == now.month && date.day == now.day;
+    return isToday
+        ? DateFormat('HH:mm').format(date)
+        : DateFormat('d MMM', 'id_ID').format(date);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dashboard = context.watch<DashboardProvider>();
+    final recent = dashboard.recentTransactions;
+
+    Widget content;
+    if (dashboard.isLoading && recent.isEmpty) {
+      content = const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: Center(child: CircularProgressIndicator.adaptive()),
+      );
+    } else if (recent.isEmpty) {
+      content = const Padding(
+        padding: EdgeInsets.symmetric(vertical: 28, horizontal: 16),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: isSelected ? mandiriBlueDark : Colors.grey.shade400,
-              size: 24,
-            ),
-            const SizedBox(height: 4),
+            Icon(LucideIcons.receipt, size: 28, color: AppColors.mutedForeground),
+            SizedBox(height: 8),
             Text(
-              label,
+              "Belum ada transaksi minggu ini",
               style: TextStyle(
-                fontSize: 10,
-                color: isSelected ? mandiriBlueDark : Colors.grey.shade400,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: AppColors.foreground,
+              ),
+            ),
+            SizedBox(height: 4),
+            Text(
+              "Tekan tombol Kasir di bawah untuk mulai berjualan.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: AppColors.mutedForeground),
+            ),
+          ],
+        ),
+      );
+    } else {
+      content = Column(
+        children: [
+          for (final tx in recent)
+            _TransactionRow(
+              time: _timeLabel(tx['date'] as DateTime),
+              customer: (tx['customerName'] as String?)?.isNotEmpty == true
+                  ? tx['customerName'] as String
+                  : 'Pelanggan Umum',
+              detail:
+                  "${tx['itemsCount']} barang · ${_paymentLabel(tx['paymentMethod']?.toString() ?? '')}",
+              amount: _rupiah.format(tx['totalAmount'] as int),
+            ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(child: _SectionTitle("Transaksi terakhir")),
+            TextButton(
+              onPressed: onSeeAll,
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+              child: const Text(
+                "Lihat semua",
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
               ),
             ),
           ],
         ),
+        const SizedBox(height: 4),
+        _Panel(children: [content]),
+      ],
+    );
+  }
+}
+
+class _TransactionRow extends StatelessWidget {
+  final String time;
+  final String customer;
+  final String detail;
+  final String amount;
+
+  const _TransactionRow({
+    required this.time,
+    required this.customer,
+    required this.detail,
+    required this.amount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 52,
+            child: Text(
+              time,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.mutedForeground,
+                fontFeatures: _tabular,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  customer,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.foreground,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  detail,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            amount,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.foreground,
+              fontFeatures: _tabular,
+            ),
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildCenterNavItem() {
-    return Transform.translate(
-      offset: const Offset(0, -20),
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedIndex = 2),
-        child: Container(
-          width: 58,
-          height: 58,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [mandiriBlueLight, mandiriBlueDark],
+// ---------------------------------------------------------------------------
+// Shared building blocks
+// ---------------------------------------------------------------------------
+
+class _SectionTitle extends StatelessWidget {
+  final String text;
+
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 17,
+        fontWeight: FontWeight.w600,
+        color: AppColors.foreground,
+      ),
+    );
+  }
+}
+
+/// White card with hairline border; children are separated by dividers.
+class _Panel extends StatelessWidget {
+  final List<Widget> children;
+
+  const _Panel({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0)
+              const Divider(
+                height: 1,
+                thickness: 1,
+                indent: 16,
+                endIndent: 16,
+                color: AppColors.muted,
+              ),
+            children[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MenuGroupTitle extends StatelessWidget {
+  final String text;
+
+  const _MenuGroupTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: AppColors.mutedForeground,
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuTile extends StatelessWidget {
+  final DuoIcons icon;
+  final String label;
+  final String? badge;
+  final VoidCallback onTap;
+
+  const _MenuTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: onTap,
+      minTileHeight: 52,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      leading: DuoIconTile(icon, size: 40),
+      title: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: AppColors.foreground,
+        ),
+      ),
+      trailing: badge == null
+          ? const Icon(
+              LucideIcons.chevronRight,
+              size: 18,
+              color: AppColors.mutedForeground,
+            )
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                badge!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
             ),
+    );
+  }
+}
+
+// ===========================================================================
+// FLOATING BOTTOM NAV
+// ===========================================================================
+
+class _BottomNav extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onSelect;
+
+  const _BottomNav({required this.selectedIndex, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: AppColors.border),
             boxShadow: [
               BoxShadow(
-                color: mandiriBlueDark.withOpacity(0.4),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
+                color: const Color(0xFF0F172A).withValues(alpha: 0.08),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-          child: const Center(
-            child: Icon(
-              LucideIcons.shoppingCart,
-              color: Colors.white,
-              size: 26,
+          child: Row(
+            children: [
+              _NavItem(
+                icon: LucideIcons.house,
+                label: "Beranda",
+                selected: selectedIndex == 0,
+                onTap: () => onSelect(0),
+              ),
+              _NavItem(
+                icon: LucideIcons.package,
+                label: "Produk",
+                selected: selectedIndex == 1,
+                onTap: () => onSelect(1),
+              ),
+              _KasirNavItem(
+                selected: selectedIndex == 2,
+                onTap: () => onSelect(2),
+              ),
+              _NavItem(
+                icon: LucideIcons.history,
+                label: "Riwayat",
+                selected: selectedIndex == 3,
+                onTap: () => onSelect(3),
+              ),
+              _NavItem(
+                icon: LucideIcons.settings,
+                label: "Setelan",
+                selected: selectedIndex == 4,
+                onTap: () => onSelect(4),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.primary : AppColors.mutedForeground;
+
+    return Expanded(
+      child: Semantics(
+        selected: selected,
+        button: true,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: SizedBox(
+            height: 60,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: selected ? AppColors.accentSoft : Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, size: 22, color: color),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: color,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       ),
     );
   }
+}
 
-  void _navigateTo(Widget screen) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+/// The primary action of the app: logo navy + yellow, matching the Beranda header.
+class _KasirNavItem extends StatelessWidget {
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _KasirNavItem({required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Semantics(
+        selected: selected,
+        button: true,
+        label: "Kasir",
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: SizedBox(
+            height: 60,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 44,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.brandNavy,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.brandNavy.withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    LucideIcons.shoppingCart,
+                    size: 20,
+                    color: AppColors.brandYellow,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Kasir",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? AppColors.primary : AppColors.foreground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

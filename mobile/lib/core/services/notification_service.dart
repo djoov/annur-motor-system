@@ -44,8 +44,8 @@ class NotificationService {
   }) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
-          'mekanikhub_notifications', // channel Id
-          'MekanikHub Notifications', // channel Name
+          'annur_app_notifications', // channel Id
+          'Annur App Notifications', // channel Name
           channelDescription: 'Main channel for app notifications',
           importance: Importance.max,
           priority: Priority.high,

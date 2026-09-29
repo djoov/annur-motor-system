@@ -6,15 +6,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_pos_printer_platform/esc_pos_utils_platform/esc_pos_utils_platform.dart';
 import 'package:flutter_pos_printer_platform/flutter_pos_printer_platform.dart';
 import 'package:image/image.dart' as img;
-import 'package:dart_ping_ios/dart_ping_ios.dart';
+// import 'package:dart_ping_ios/dart_ping_ios.dart';
 import 'image_utils.dart';
 // import 'package:gbk_codec/gbk_codec.dart';
 
 void main() {
-  // Register DartPingIOS
-  if (Platform.isIOS) {
-    DartPingIOS.register();
-  }
   runApp(const MyApp());
 }
 

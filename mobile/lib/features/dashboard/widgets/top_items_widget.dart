@@ -20,7 +20,7 @@ class TopItemsWidget extends StatelessWidget {
         children: [
           const Row(
             children: [
-              Icon(LucideIcons.trophy, color: Colors.amber, size: 20),
+              Icon(LucideIcons.trophy, color: AppColors.warning, size: 20),
               SizedBox(width: 8),
               Text(
                 "Produk Terlaris (7 Hari)",
@@ -35,7 +35,7 @@ class TopItemsWidget extends StatelessWidget {
               child: Center(
                 child: Text(
                   "Belum ada data penjualan",
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(color: AppColors.mutedForeground),
                 ),
               ),
             )
@@ -66,7 +66,7 @@ class TopItemsWidget extends StatelessWidget {
                             Container(
                               height: 8,
                               decoration: BoxDecoration(
-                                color: Colors.grey[100],
+                                color: AppColors.muted,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ),

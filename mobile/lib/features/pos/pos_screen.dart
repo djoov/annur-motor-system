@@ -3,18 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For Shortcuts
 import 'package:provider/provider.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:intl/intl.dart';
 import '../../core/theme.dart';
-
-import '../../ui/input.dart';
+import '../../ui/bottom_nav_metrics.dart';
 
 import 'pos_provider.dart';
 import 'models/pos_models.dart';
-
-import '../history/history_screen.dart';
+import 'widgets/pos_widgets.dart';
 
 import 'receipt_preview_screen.dart';
-import 'cart_screen.dart'; // Import CartScreen
+import 'cart_screen.dart';
 import '../scan/scan_screen.dart';
 
 class PosScreen extends StatefulWidget {
@@ -25,16 +22,16 @@ class PosScreen extends StatefulWidget {
 }
 
 class _PosScreenState extends State<PosScreen> {
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<PosProvider>(context, listen: false).fetchData();
+      context.read<PosProvider>().fetchData();
     });
   }
-
-  final _searchController = TextEditingController();
-  final _searchFocusNode = FocusNode(); // Added FocusNode
 
   @override
   void dispose() {
@@ -43,183 +40,138 @@ class _PosScreenState extends State<PosScreen> {
     super.dispose();
   }
 
-  final currencyFormat = NumberFormat.currency(
-    locale: 'id_ID',
-    symbol: 'Rp ',
-    decimalDigits: 0,
-  );
+  void _clearSearch(PosProvider provider) {
+    _searchController.clear();
+    provider.searchItems('');
+    setState(() {});
+  }
+
+  Future<void> _scanBarcode(PosProvider provider) async {
+    final code = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const ScanScreen(returnCodeOnly: true),
+      ),
+    );
+    if (code is! String || !mounted) return;
+
+    final exactItem = provider.findItemByCode(code);
+    if (exactItem != null) {
+      posAddToCart(context, provider, exactItem);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text("Ditambahkan: ${exactItem.name}"),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      _clearSearch(provider);
+    } else {
+      setState(() => _searchController.text = code);
+      provider.searchItems(code);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Kode $code tidak ada di daftar barang"),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final posProvider = Provider.of<PosProvider>(context);
+    final posProvider = context.watch<PosProvider>();
 
-    // Main Content
     final content = LayoutBuilder(
       builder: (context, constraints) {
         final isTablet = constraints.maxWidth > 800;
         final isDesktop = constraints.maxWidth > 1200;
+        final showCartBar = !isTablet && posProvider.cart.isNotEmpty;
+        final navTop = BottomNavMetrics.top(context);
 
         return CallbackShortcuts(
           bindings: {
-            const SingleActivator(LogicalKeyboardKey.f2): () {
-              // F2: Focus Search
-              _searchFocusNode.requestFocus();
-            },
+            const SingleActivator(LogicalKeyboardKey.f2): () =>
+                _searchFocusNode.requestFocus(),
             const SingleActivator(LogicalKeyboardKey.f4): () {
-              // F4: Checkout
               if (posProvider.cart.isNotEmpty) {
                 _handleCheckout(context, posProvider);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Keranjang kosong")),
+                  const SnackBar(content: Text("Keranjang masih kosong")),
                 );
               }
             },
             const SingleActivator(LogicalKeyboardKey.escape): () {
-              // Esc: Clear Search & Unfocus
-              _searchController.clear();
-              posProvider.searchItems('');
+              _clearSearch(posProvider);
               _searchFocusNode.unfocus();
             },
           },
           child: FocusScope(
             autofocus: true,
             child: Scaffold(
-              appBar: AppBar(
-                title: const Text("MekanikHub POS"),
-                actions: [
-                  IconButton(
-                    icon: const Icon(LucideIcons.history),
-                    tooltip: 'Riwayat Transaksi',
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const HistoryScreen(),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(LucideIcons.refreshCw),
-                    tooltip: 'Refresh Data',
-                    onPressed: () {
-                      posProvider.fetchData();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Data diperbarui")),
-                      );
-                    },
-                  ),
-                  // Cart Icon: ONLY show on Mobile (when Panel is hidden)
-                  if (!isTablet)
-                    Stack(
-                      children: [
-                        IconButton(
-                          icon: const Icon(LucideIcons.shoppingCart),
-                          tooltip: 'Keranjang',
-                          onPressed: () => _showCartModal(context),
+              appBar: AppBar(title: const Text("Kasir")),
+              body: Stack(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 7,
+                        child: Column(
+                          children: [
+                            _buildSearchHeader(posProvider, isTablet),
+                            Expanded(
+                              child: _buildItemGrid(
+                                posProvider,
+                                crossAxisCount:
+                                    isDesktop ? 5 : (isTablet ? 4 : 2),
+                                bottomPadding: isTablet
+                                    ? 24
+                                    : navTop + (showCartBar ? 84 : 16),
+                              ),
+                            ),
+                          ],
                         ),
-                        if (posProvider.totalItems > 0)
-                          Positioned(
-                            right: 5,
-                            top: 5,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
+                      ),
+                      if (isTablet)
+                        SizedBox(
+                          width: constraints.maxWidth > 1100 ? 400 : 340,
+                          child: DecoratedBox(
+                            decoration: const BoxDecoration(
+                              color: AppColors.surface,
+                              border: Border(
+                                left: BorderSide(color: AppColors.border),
                               ),
-                              constraints: const BoxConstraints(
-                                minWidth: 16,
-                                minHeight: 16,
-                              ),
-                              child: Text(
-                                '${posProvider.totalItems}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
+                            ),
+                            child: _CartPanel(
+                              provider: posProvider,
+                              onCheckout: () =>
+                                  _handleCheckout(context, posProvider),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (showCartBar)
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: navTop + 10,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 560),
+                          child: CartSummaryBar(
+                            itemCount: posProvider.totalItems,
+                            total: posProvider.totalAmount,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const CartScreen(),
                               ),
                             ),
                           ),
-                      ],
-                    ),
-                  const SizedBox(width: 8),
-                ],
-              ),
-              drawer: null,
-              body: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left: Items (Expanded)
-                  Expanded(
-                    flex: 7,
-                    child: Column(
-                      children: [
-                        // Search & Categories
-                        _buildHeader(posProvider),
-
-                        // Item Grid
-                        Expanded(
-                          child: Selector<PosProvider, List<Item>>(
-                            selector: (_, provider) => provider.filteredItems,
-                            builder: (_, items, __) {
-                              return posProvider.isLoading
-                                  ? const Center(
-                                      child: CircularProgressIndicator(),
-                                    )
-                                  : items.isEmpty
-                                  ? const Center(
-                                      child: Text("Barang tidak ditemukan"),
-                                    )
-                                  : GridView.builder(
-                                      padding: const EdgeInsets.only(
-                                        left: 16,
-                                        right: 16,
-                                        top: 16,
-                                        bottom: 80,
-                                      ),
-                                      gridDelegate:
-                                          SliverGridDelegateWithFixedCrossAxisCount(
-                                            crossAxisCount: isDesktop
-                                                ? 5
-                                                : (isTablet ? 4 : 2),
-                                            childAspectRatio: isDesktop
-                                                ? 0.75
-                                                : (isTablet ? 0.8 : 0.65),
-                                            crossAxisSpacing: 16,
-                                            mainAxisSpacing: 16,
-                                          ),
-                                      itemCount: items.length,
-                                      itemBuilder: (context, index) {
-                                        return _buildItemCard(
-                                          items[index],
-                                          posProvider,
-                                        );
-                                      },
-                                    );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Right: Cart Panel (Only Desktop/Tablet)
-                  if (isTablet)
-                    Expanded(
-                      flex: 3,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          border: Border(
-                            left: BorderSide(color: AppColors.border),
-                          ),
-                        ),
-                        child: _buildCartPanel(
-                          context,
-                          posProvider,
-                          isTablet: true,
                         ),
                       ),
                     ),
@@ -237,177 +189,77 @@ class _PosScreenState extends State<PosScreen> {
     return content;
   }
 
-  Widget _buildHeader(PosProvider provider) {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: CustomInput(
-                    placeholder: "Cari Kode / Nama / Tags... (F2)",
-                    controller: _searchController,
-                    focusNode: _searchFocusNode, // Connect FocusNode
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_searchController.text.isNotEmpty)
-                          IconButton(
-                            icon: const Icon(LucideIcons.x),
-                            onPressed: () {
-                              _searchController.clear();
-                              provider.searchItems('');
-                            },
-                          ),
-                        IconButton(
-                          icon: const Icon(LucideIcons.scanLine),
-                          tooltip: 'Scan Barcode',
-                          onPressed: () async {
-                            // Navigate to ScanScreen
-                            final code = await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const ScanScreen(),
-                              ),
-                            );
+  Widget _buildSearchHeader(PosProvider provider, bool isTablet) {
+    final categories =
+        provider.categories.isEmpty ? const ["Semua"] : provider.categories;
 
-                            if (code != null &&
-                                code is String &&
-                                context.mounted) {
-                              // Auto-Add Logic
-                              final exactItem = provider.findItemByCode(code);
-                              if (exactItem != null) {
-                                provider.addToCart(exactItem);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      "Ditambahkan: ${exactItem.name}",
-                                    ),
-                                    backgroundColor: Colors.green,
-                                    duration: const Duration(seconds: 1),
-                                  ),
-                                );
-                                // Clear search to keep UI clean, as item is already in cart
-                                _searchController.clear();
-                                provider.searchItems('');
-                              } else {
-                                // Fallback to Search
-                                setState(() {
-                                  _searchController.text = code;
-                                });
-                                provider.searchItems(code);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      "Barang tidak ditemukan dalam database",
-                                    ),
-                                    backgroundColor: Colors.orange,
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    onChanged: (val) => provider.searchItems(val),
+    return Container(
+      color: AppColors.surface,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  focusNode: _searchFocusNode,
+                  textInputAction: TextInputAction.search,
+                  onChanged: (val) {
+                    provider.searchItems(val);
+                    setState(() {});
+                  },
+                  decoration: InputDecoration(
+                    hintText: isTablet
+                        ? "Cari nama, kode, atau tag (F2)"
+                        : "Cari nama, kode, atau tag",
+                    prefixIcon: const Icon(LucideIcons.search, size: 20),
+                    suffixIcon: _searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(LucideIcons.x, size: 18),
+                            tooltip: "Hapus pencarian",
+                            onPressed: () => _clearSearch(provider),
+                          ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                // Workshop Mode Toggle
-                Column(
-                  children: [
-                    const Text(
-                      "Mode Bengkel",
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 56,
+                height: 56,
+                child: IconButton.filled(
+                  onPressed: () => _scanBarcode(provider),
+                  tooltip: "Scan barcode",
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    Switch(
-                      value: provider.isWorkshopMode,
-                      onChanged: (val) {
-                        // Confirmation if cart not empty?
-                        if (provider.cart.isNotEmpty) {
-                          showDialog(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: const Text("Ubah Harga?"),
-                              content: const Text(
-                                "Mengubah mode akan mereset harga barang di keranjang.",
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text("Batal"),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    provider.setWorkshopMode(val);
-                                  },
-                                  child: const Text("Ya, Ubah"),
-                                ),
-                              ],
-                            ),
-                          );
-                        } else {
-                          provider.setWorkshopMode(val);
-                        }
-                      },
-                      activeColor: AppColors.primary,
-                    ),
-                  ],
+                  ),
+                  icon: const Icon(LucideIcons.scanLine,
+                      color: Colors.white, size: 24),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children:
-                  (provider.categories.isEmpty
-                          ? ["Semua"]
-                          : provider.categories)
-                      .map((cat) {
-                        final isSelected = provider.selectedCategory == cat;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: FilterChip(
-                            label: Text(cat),
-                            selected: isSelected,
-                            onSelected: (_) => provider.filterCategory(cat),
-                            backgroundColor: AppColors.background,
-                            selectedColor: AppColors.primary.withOpacity(0.1),
-                            labelStyle: TextStyle(
-                              color: isSelected
-                                  ? AppColors.primary
-                                  : AppColors.foreground,
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              side: BorderSide(
-                                color: isSelected
-                                    ? AppColors.primary
-                                    : AppColors.border,
-                              ),
-                            ),
-                            checkmarkColor: AppColors.primary,
-                          ),
-                        );
-                      })
-                      .toList(),
+          SizedBox(
+            height: 40,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: categories.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (_, i) {
+                final cat = categories[i];
+                return ChoiceChip(
+                  label: Text(cat),
+                  selected: provider.selectedCategory == cat,
+                  showCheckmark: false,
+                  onSelected: (_) => provider.filterCategory(cat),
+                );
+              },
             ),
           ),
         ],
@@ -415,193 +267,226 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
-  Widget _buildItemCard(Item item, PosProvider provider) {
-    // Traffic Light Logic
-    final isDisplayAvailable = item.stockDisplay > 0;
-    final isWarehouseAvailable = item.stockWarehouse > 0;
-    final isOutOfStock = !isDisplayAvailable && !isWarehouseAvailable;
+  Widget _buildItemGrid(
+    PosProvider provider, {
+    required int crossAxisCount,
+    required double bottomPadding,
+  }) {
+    if (provider.isLoading && provider.filteredItems.isEmpty) {
+      return const Center(child: CircularProgressIndicator.adaptive());
+    }
 
-    // Price to show (Workshop vs Normal)
-    final displayPrice = provider.isWorkshopMode && item.priceWorkshop > 0
-        ? item.priceWorkshop
-        : item.sellPrice;
-
-    return GestureDetector(
-      onTap: isOutOfStock
-          ? null
-          : () {
-              if (!isDisplayAvailable && isWarehouseAvailable) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Stok Toko HABIS! Ambil dari GUDANG."),
-                    duration: Duration(seconds: 1),
-                    backgroundColor: Colors.amber,
-                  ),
-                );
-              }
-              provider.addToCart(item);
-            },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade100),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+    if (provider.filteredItems.isEmpty) {
+      final searching = _searchController.text.isNotEmpty ||
+          provider.selectedCategory != "Semua";
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(LucideIcons.packageOpen,
+                  size: 48, color: AppColors.mutedForeground),
+              const SizedBox(height: 12),
+              Text(
+                searching ? "Barang tidak ditemukan" : "Belum ada barang",
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                searching
+                    ? "Coba kata lain atau scan barcode-nya."
+                    : "Tambahkan barang di menu Produk.",
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              if (searching) ...[
+                const SizedBox(height: 16),
+                OutlinedButton(
+                  onPressed: () {
+                    _clearSearch(provider);
+                    provider.filterCategory("Semua");
+                  },
+                  child: const Text("Tampilkan semua barang"),
+                ),
+              ],
+            ],
+          ),
         ),
-        clipBehavior: Clip.antiAlias,
+      );
+    }
+
+    return GridView.builder(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        mainAxisExtent: 236,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: provider.filteredItems.length,
+      itemBuilder: (context, index) {
+        final item = provider.filteredItems[index];
+        return _ItemCard(
+          item: item,
+          inCart: provider.quantityInCart(item.id),
+          onTap: () => posAddToCart(context, provider, item),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleCheckout(
+    BuildContext context,
+    PosProvider provider,
+  ) async {
+    if (provider.needsCustomerForDebt) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Pilih pelanggan untuk mencatat hutang")),
+      );
+      return;
+    }
+
+    final draftData = provider.calculateTransactionSummary();
+    if (draftData != null && context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ReceiptPreviewScreen(
+            transactionData: draftData,
+            isDraft: true,
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Keranjang masih kosong")),
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Product card
+// ---------------------------------------------------------------------------
+
+class _ItemCard extends StatelessWidget {
+  final Item item;
+  final int inCart;
+  final VoidCallback onTap;
+
+  const _ItemCard({
+    required this.item,
+    required this.inCart,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isOut = item.stockDisplay <= 0;
+    final hasImage = item.imageUrl != null && item.imageUrl!.isNotEmpty;
+
+    Widget placeholder() => Container(
+          color: AppColors.muted,
+          alignment: Alignment.center,
+          child: const Icon(LucideIcons.package,
+              size: 32, color: AppColors.mutedForeground),
+        );
+
+    return Material(
+      color: AppColors.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: inCart > 0 ? AppColors.primary : AppColors.border,
+          width: inCart > 0 ? 2 : 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Image Area (Smaller)
             Expanded(
-              flex: 5,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (item.imageUrl != null && item.imageUrl!.isNotEmpty)
-                    Image.network(
-                      item.imageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: Colors.grey.shade50,
-                        child: Icon(
-                          LucideIcons.image,
-                          color: Colors.grey.shade300,
-                          size: 32,
-                        ),
-                      ),
-                    )
-                  else
-                    Container(
-                      color: Colors.grey.shade50,
-                      child: Icon(
-                        LucideIcons.package,
-                        color: Colors.grey.shade300,
-                        size: 32,
-                      ),
-                    ),
-
-                  // Out of Stock Overlay
-                  if (isOutOfStock)
-                    Container(
-                      color: Colors.black54,
-                      alignment: Alignment.center,
-                      child: const Text(
-                        "HABIS",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ),
-
-                  // Stock Badge (Traffic Light Style)
-                  Positioned(
-                    top: 6,
-                    right: 6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isDisplayAvailable
-                            ? Colors.green.withOpacity(0.9)
-                            : (isWarehouseAvailable
-                                  ? Colors.amber.withOpacity(0.9)
-                                  : Colors.red),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        isDisplayAvailable
-                            ? "Toko: ${item.stockDisplay}"
-                            : (isWarehouseAvailable
-                                  ? "Gudang: ${item.stockWarehouse}"
-                                  : "0"),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Workshop Badge
-                  if (provider.isWorkshopMode && item.priceWorkshop > 0)
+                  hasImage
+                      ? Image.network(
+                          item.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => placeholder(),
+                        )
+                      : placeholder(),
+                  if (isOut)
+                    Container(color: Colors.white.withValues(alpha: 0.6)),
+                  Positioned(left: 8, top: 8, child: StockBadge(item.stockDisplay)),
+                  if (inCart > 0)
                     Positioned(
-                      top: 6,
-                      left: 6,
+                      right: 8,
+                      top: 8,
                       child: Container(
-                        padding: const EdgeInsets.all(4),
+                        constraints:
+                            const BoxConstraints(minWidth: 30, minHeight: 30),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: Colors.purple,
-                          borderRadius: BorderRadius.circular(4),
+                          color: AppColors.brandNavy,
+                          borderRadius: BorderRadius.circular(15),
                         ),
-                        child: const Icon(
-                          LucideIcons.wrench,
-                          color: Colors.white,
-                          size: 10,
+                        child: Text(
+                          "$inCart",
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.brandYellow,
+                            fontFeatures: posTabular,
+                          ),
                         ),
                       ),
                     ),
                 ],
               ),
             ),
-
-            // Content Area
-            Expanded(
-              flex: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(10), // Reduced padding
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.category ?? '-',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey.shade500,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          item.name,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            height: 1.2,
-                            color: AppColors.foreground,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                    Text(
-                      currencyFormat.format(displayPrice),
-                      style: const TextStyle(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 38,
+                    child: Text(
+                      item.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                        height: 1.3,
+                        color: isOut
+                            ? AppColors.mutedForeground
+                            : AppColors.foreground,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    posRupiah.format(item.sellPrice),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.foreground,
+                      fontFeatures: posTabular,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -609,462 +494,167 @@ class _PosScreenState extends State<PosScreen> {
       ),
     );
   }
+}
 
-  void _showCartModal(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const CartScreen()),
-    );
-  }
+// ---------------------------------------------------------------------------
+// Tablet / desktop cart panel
+// ---------------------------------------------------------------------------
 
-  Widget _buildCartPanel(
-    BuildContext context,
-    PosProvider provider, {
-    bool isTablet = false,
-    ScrollController? scrollController,
-  }) {
+class _CartPanel extends StatelessWidget {
+  final PosProvider provider;
+  final VoidCallback onCheckout;
+
+  const _CartPanel({required this.provider, required this.onCheckout});
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = provider.cart;
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Receipt Header
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 8, 12),
           child: Row(
             children: [
-              const Icon(
-                LucideIcons.receipt,
-                size: 20,
-                color: AppColors.primary,
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                "Rincian Pesanan",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: AppColors.primary,
+              const Expanded(
+                child: Text(
+                  "Pesanan",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                 ),
               ),
-              const Spacer(),
-              if (provider.cart.isNotEmpty)
+              if (cart.isNotEmpty)
                 TextButton.icon(
-                  onPressed: () => provider.clearCart(),
-                  icon: const Icon(
-                    LucideIcons.trash2,
-                    size: 16,
-                    color: Colors.red,
-                  ),
-                  label: const Text(
-                    "Reset",
-                    style: TextStyle(color: Colors.red),
-                  ),
+                  onPressed: provider.clearCart,
+                  icon: const Icon(LucideIcons.trash2, size: 18),
+                  label: const Text("Kosongkan"),
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    backgroundColor: Colors.red.withOpacity(0.05),
+                    foregroundColor: AppColors.destructiveStrong,
                   ),
-                ),
-              if (!isTablet)
-                IconButton(
-                  icon: const Icon(LucideIcons.x),
-                  onPressed: () => Navigator.pop(context),
                 ),
             ],
           ),
         ),
-
-        // Cart Items List
+        const Divider(),
         Expanded(
-          child: provider.cart.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          shape: BoxShape.circle,
+          child: cart.isEmpty
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.shoppingCart,
+                            size: 40, color: AppColors.mutedForeground),
+                        SizedBox(height: 12),
+                        Text(
+                          "Keranjang kosong",
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                        child: Icon(
-                          LucideIcons.shoppingCart,
-                          size: 48,
-                          color: Colors.grey.shade400,
+                        SizedBox(height: 4),
+                        Text(
+                          "Tap barang di kiri atau scan barcode.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        "Keranjang Kosong",
-                        style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Pilih barang dari menu\nuntuk menambahkan pesanan",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.grey.shade400,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 )
-              : ListView.separated(
-                  controller: scrollController,
+              : ListView(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: provider.cart.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final item = provider.cart[index];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Item Details
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                    color: AppColors.foreground,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Text(
-                                      currencyFormat.format(item.sellPrice),
-                                      style: TextStyle(
-                                        color: Colors.grey.shade600,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    if (item.category != null) ...[
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        "•  ${item.category!}",
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey.shade400,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Qty Controllers & Total
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                currencyFormat.format(
-                                  item.sellPrice * item.quantity,
-                                ),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final item in cart) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  InkWell(
-                                    onTap: () =>
-                                        provider.updateQuantity(item.id, -1),
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade100,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        LucideIcons.minus,
-                                        size: 14,
-                                        color: Colors.grey.shade700,
-                                      ),
+                                  Text(
+                                    item.name,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  SizedBox(
-                                    width: 32,
-                                    child: Text(
-                                      "${item.quantity}",
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                  InkWell(
-                                    onTap: () =>
-                                        provider.updateQuantity(item.id, 1),
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        LucideIcons.plus,
-                                        size: 14,
-                                        color: Colors.white,
-                                      ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    posRupiah.format(
+                                        item.sellPrice * item.quantity),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      fontFeatures: posTabular,
                                     ),
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                        ],
+                            ),
+                            const SizedBox(width: 8),
+                            QtyStepper(
+                              quantity: item.quantity,
+                              onMinus: () =>
+                                  provider.updateQuantity(item.id, -1),
+                              onPlus: () =>
+                                  posAddToCart(context, provider, item),
+                            ),
+                          ],
+                        ),
                       ),
-                    );
-                  },
+                      const Divider(indent: 20, endIndent: 20),
+                    ],
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                      child: CrossSellStrip(provider: provider),
+                    ),
+                  ],
                 ),
         ),
-
-        // Footer: Summary & Actions
         Container(
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            border: Border(top: BorderSide(color: Colors.grey.shade200)),
+          decoration: const BoxDecoration(
+            color: AppColors.background,
+            border: Border(top: BorderSide(color: AppColors.border)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Clean Transaction Details Block
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Column(
-                  children: [
-                    // Customer Row
-                    Row(
-                      children: [
-                        const Icon(
-                          LucideIcons.user,
-                          size: 14,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          "Pelanggan",
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                        const Spacer(),
-                        InkWell(
-                          onTap: () {
-                            // Logic to open customer selection if needed again
-                            // For now relies on the list below or we can move the list here in a dialog
-                          },
-                          child: Row(
-                            children: [
-                              Text(
-                                provider.selectedCustomer?.name ?? "Umum",
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              // const Icon(LucideIcons.chevronDown, size: 14),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 16),
-                    // Customer Chips List (Compact)
-                    SizedBox(
-                      height: 30,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          _buildCustomerChip(
-                            provider,
-                            'umum',
-                            'Umum',
-                            compact: true,
-                          ),
-                          ...provider.customers.map(
-                            (c) => _buildCustomerChip(
-                              provider,
-                              c.id,
-                              c.name,
-                              compact: true,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
+              CustomerPicker(provider: provider),
               const SizedBox(height: 12),
-
-              // Payment Settings Block
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildChoiceChip(
-                            label: "Lunas",
-                            isSelected: !provider.isDebt,
-                            onSelected: () => provider.setDebt(false),
-                            color: Colors.green,
-                            compact: true,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _buildChoiceChip(
-                            label: "Hutang",
-                            isSelected: provider.isDebt,
-                            onSelected: () => provider.setDebt(true),
-                            color: Colors.red,
-                            compact: true,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (!provider.isDebt) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildChoiceChip(
-                              label: "Tunai",
-                              isSelected: provider.paymentType == 'cash',
-                              onSelected: () => provider.setPaymentType('cash'),
-                              color: AppColors.primary,
-                              compact: true,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _buildChoiceChip(
-                              label: "Transfer",
-                              isSelected: provider.paymentType == 'transfer',
-                              onSelected: () =>
-                                  provider.setPaymentType('transfer'),
-                              color: Colors.purple,
-                              compact: true,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Total
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    "Total Tagihan",
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        "${provider.totalItems} Barang",
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
-                        ),
-                      ),
-                      Text(
-                        currencyFormat.format(provider.totalAmount),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 24,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
+              PaymentMethodSelector(provider: provider),
               const SizedBox(height: 16),
-
-              // Checkout Button
+              TotalRow(
+                itemCount: provider.totalItems,
+                total: provider.totalAmount,
+              ),
+              const SizedBox(height: 12),
               SizedBox(
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: provider.cart.isEmpty
+                height: 56,
+                child: FilledButton.icon(
+                  onPressed: cart.isEmpty || provider.needsCustomerForDebt
                       ? null
-                      : () => _handleCheckout(context, provider),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    disabledBackgroundColor: Colors.grey.shade300,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      : onCheckout,
+                  icon: const Icon(LucideIcons.circleCheck, size: 20),
+                  label: Text(
+                    provider.isDebt ? "Catat Hutang (F4)" : "Bayar (F4)",
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
                     ),
-                    elevation: provider.cart.isEmpty ? 0 : 4,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(LucideIcons.checkCircle, color: Colors.white),
-                      const SizedBox(width: 8),
-                      Text(
-                        "Proses Pembayaran (F4)",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: provider.cart.isEmpty
-                              ? Colors.grey.shade500
-                              : Colors.white,
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ),
@@ -1073,111 +663,5 @@ class _PosScreenState extends State<PosScreen> {
         ),
       ],
     );
-  }
-
-  Widget _buildCustomerChip(
-    PosProvider provider,
-    String id,
-    String label, {
-    bool compact = false,
-  }) {
-    final isSelected =
-        (id == 'umum' && provider.selectedCustomer == null) ||
-        (provider.selectedCustomer?.id == id);
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: InkWell(
-        onTap: () {
-          if (id == 'umum') {
-            provider.setCustomer('umum');
-          } else {
-            provider.setCustomer(id);
-          }
-        },
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 10 : 16,
-            vertical: compact ? 4 : 8,
-          ),
-          decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary : Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isSelected ? AppColors.primary : Colors.grey.shade300,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.white : Colors.grey.shade700,
-              fontSize: compact ? 11 : 13,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChoiceChip({
-    required String label,
-    required bool isSelected,
-    required VoidCallback onSelected,
-    required Color color,
-    bool compact = false,
-  }) {
-    return InkWell(
-      onTap: onSelected,
-      borderRadius: BorderRadius.circular(8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: EdgeInsets.symmetric(vertical: compact ? 8 : 12),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? color : Colors.grey.shade300,
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? color : Colors.grey.shade600,
-              fontWeight: FontWeight.bold,
-              fontSize: compact ? 12 : 13,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _handleCheckout(
-    BuildContext context,
-    PosProvider provider,
-  ) async {
-    // 1. Calculate Draft (No DB Write)
-    final draftData = provider.calculateTransactionSummary();
-
-    if (draftData != null && context.mounted) {
-      // 2. Navigate to Preview (Confirmation)
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ReceiptPreviewScreen(
-            transactionData: draftData,
-            isDraft: true, // Enable Confirmation Mode
-          ),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Transaksi kosong atau gagal")),
-      );
-    }
   }
 }

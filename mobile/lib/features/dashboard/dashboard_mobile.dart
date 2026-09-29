@@ -67,7 +67,7 @@ class DashboardMobile extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: const BoxDecoration(
-                      color: Colors.red,
+                      color: AppColors.destructive,
                       shape: BoxShape.circle,
                     ),
                     constraints: const BoxConstraints(
@@ -79,7 +79,7 @@ class DashboardMobile extends StatelessWidget {
                         pendingCount > 9 ? '9+' : '$pendingCount',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -112,8 +112,8 @@ class DashboardMobile extends StatelessWidget {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xFF1E293B), // Slate 800
-                    Color(0xFF0F172A), // Slate 900
+                    AppColors.foreground, // Slate 800
+                    AppColors.foreground, // Slate 900
                   ],
                 ),
                 borderRadius: BorderRadius.vertical(
@@ -173,7 +173,7 @@ class DashboardMobile extends StatelessWidget {
                       ),
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.white.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: IconButton(
@@ -208,21 +208,21 @@ class DashboardMobile extends StatelessWidget {
                                   dashboardProvider.totalSales,
                                 ),
                                 LucideIcons.banknote,
-                                const Color(0xFF3B82F6), // Blue
+                                AppColors.primary, // Blue
                               ),
                               const SizedBox(width: 16),
                               _buildSummaryCard(
                                 "Transaksi",
                                 "${dashboardProvider.transactionCount}",
                                 LucideIcons.shoppingBag,
-                                const Color(0xFF10B981), // Emerald
+                                AppColors.success, // Emerald
                               ),
                               const SizedBox(width: 16),
                               _buildSummaryCard(
                                 "Total Pelanggan",
                                 "${dashboardProvider.customerCount}",
                                 LucideIcons.users,
-                                const Color(0xFFF59E0B), // Amber
+                                AppColors.warning, // Amber
                               ),
                             ],
                           ),
@@ -266,7 +266,7 @@ class DashboardMobile extends StatelessWidget {
                             "Kasir (POS)",
                             "Buat Transaksi",
                             LucideIcons.shoppingCart,
-                            const Color(0xFF3B82F6),
+                            AppColors.primary,
                             () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -279,7 +279,7 @@ class DashboardMobile extends StatelessWidget {
                             "Kelola Produk",
                             "Data Barang",
                             LucideIcons.package,
-                            const Color(0xFFF97316),
+                            AppColors.warning,
                             () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -292,7 +292,7 @@ class DashboardMobile extends StatelessWidget {
                             "Cek Harga",
                             "Scan QR Code",
                             LucideIcons.scanLine,
-                            const Color(0xFF8B5CF6),
+                            AppColors.primary,
                             () async {
                               final code = await Navigator.push(
                                 context,
@@ -317,7 +317,7 @@ class DashboardMobile extends StatelessWidget {
                             "Laporan",
                             "Riwayat & Omset",
                             LucideIcons.fileBarChart,
-                            const Color(0xFF10B981),
+                            AppColors.success,
                             () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -362,7 +362,7 @@ class DashboardMobile extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(20),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
+                                      color: Colors.black.withValues(alpha: 0.05),
                                       blurRadius: 10,
                                       offset: const Offset(0, 4),
                                     ),
@@ -420,12 +420,12 @@ class DashboardMobile extends StatelessWidget {
       width: 170, // Increased for better fit
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF334155), // DarkSlate
+        color: AppColors.foreground, // DarkSlate
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -441,7 +441,7 @@ class DashboardMobile extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.2),
+                  color: color.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: color, size: 20),
@@ -468,7 +468,7 @@ class DashboardMobile extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 title,
-                style: const TextStyle(color: Colors.white60, fontSize: 11),
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -494,10 +494,10 @@ class DashboardMobile extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border.withOpacity(0.5)),
+          border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
           boxShadow: [
             BoxShadow(
-              color: AppColors.primary.withOpacity(0.04),
+              color: AppColors.primary.withValues(alpha: 0.04),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -510,7 +510,7 @@ class DashboardMobile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: color, size: 24),
@@ -529,7 +529,7 @@ class DashboardMobile extends StatelessWidget {
               subtitle,
               style: const TextStyle(
                 color: AppColors.mutedForeground,
-                fontSize: 11,
+                fontSize: 12,
               ),
             ),
           ],

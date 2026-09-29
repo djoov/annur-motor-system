@@ -30,7 +30,7 @@ class SettingsProvider with ChangeNotifier {
   StreamSubscription<BTStatus>? _subscriptionBk;
 
   // Receipt Settings
-  String _shopName = "MekanikHub";
+  String _shopName = "Annur App";
   String _shopAddress = "Jl. Contoh No. 123";
   String _shopPhone = "0812-3456-7890";
   String _receiptFooter = "Terima Kasih atas Kunjungan Anda";

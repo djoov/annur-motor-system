@@ -8,6 +8,10 @@ class SuppliersProvider extends ChangeNotifier {
   List<SupplierModel> _suppliers = [];
   bool _isLoading = false;
 
+  SuppliersProvider() {
+    fetchSuppliers();
+  }
+
   List<SupplierModel> get suppliers => _suppliers;
   bool get isLoading => _isLoading;
 
@@ -16,10 +20,16 @@ class SuppliersProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final snapshot = await _db.collection('suppliers').orderBy('name').get();
-      _suppliers = snapshot.docs
-          .map((doc) => SupplierModel.fromFirestore(doc))
-          .toList();
+      final snapshot = await _db.collection('suppliers').get();
+      _suppliers = snapshot.docs.map((doc) {
+        try {
+          return SupplierModel.fromFirestore(doc);
+        } catch (e) {
+          print("Error parsing supplier ${doc.id}: $e");
+          return null;
+        }
+      }).whereType<SupplierModel>().toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     } catch (e) {
       print("Error fetching suppliers: $e");
     } finally {

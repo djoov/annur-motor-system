@@ -3,15 +3,18 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
+import '../../ui/stock_badge.dart';
 import '../pos/models/pos_models.dart';
 import 'item_form_screen.dart';
 import 'items_provider.dart';
 import '../auth/auth_provider.dart';
 
+const _tabular = [FontFeature.tabularFigures()];
+
 class ItemDetailScreen extends StatefulWidget {
   final Item item;
 
-  const ItemDetailScreen({Key? key, required this.item}) : super(key: key);
+  const ItemDetailScreen({super.key, required this.item});
 
   @override
   State<ItemDetailScreen> createState() => _ItemDetailScreenState();
@@ -21,6 +24,12 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   late Item _item;
   bool _isUpdating = false;
 
+  static final _rupiah = NumberFormat.currency(
+    locale: 'id_ID',
+    symbol: 'Rp ',
+    decimalDigits: 0,
+  );
+
   @override
   void initState() {
     super.initState();
@@ -29,505 +38,377 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
 
   Future<void> _adjustStock(String location, int delta) async {
     if (_isUpdating) return;
+    if (delta < 0 && _item.stockDisplay <= 0) return;
 
     setState(() => _isUpdating = true);
 
     final provider = Provider.of<ItemsProvider>(context, listen: false);
     final success = await provider.quickUpdateStock(_item.id, location, delta);
 
+    if (!mounted) return;
     if (success) {
-      // Refresh item from provider
       final updatedItem = provider.items.firstWhere(
         (i) => i.id == _item.id,
         orElse: () => _item,
       );
       setState(() => _item = updatedItem);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Stok gagal diubah. Coba lagi.")),
+      );
     }
-
     setState(() => _isUpdating = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp ',
-      decimalDigits: 0,
-    );
     final item = _item;
-    final isAdmin = Provider.of<AuthProvider>(context).isAdmin;
+    final isAdmin = context.watch<AuthProvider>().isAdmin;
+    final hasImage = item.imageUrl != null && item.imageUrl!.isNotEmpty;
+    final margin = item.sellPrice - item.buyPrice;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text("Detail Produk"),
         actions: [
           IconButton(
-            onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ItemFormScreen(item: item),
-                ),
-              );
-            },
+            onPressed: () => Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => ItemFormScreen(item: item)),
+            ),
             icon: const Icon(LucideIcons.pencil),
-            tooltip: "Edit Barang",
+            tooltip: "Edit barang",
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Header Image - Responsive
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isLandscape =
-                    MediaQuery.of(context).orientation == Orientation.landscape;
-                final isTablet = constraints.maxWidth > 600;
-
-                // Limit image size on tablet/landscape
-                final maxSize = isLandscape
-                    ? 200.0
-                    : (isTablet ? 280.0 : double.infinity);
-
-                return Center(
-                  child: Container(
-                    width: maxSize == double.infinity
-                        ? double.infinity
-                        : maxSize,
-                    margin: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: AspectRatio(
-                      aspectRatio: 1, // Square 1:1 ratio
-                      child: item.imageUrl != null && item.imageUrl!.isNotEmpty
-                          ? Image.network(
-                              item.imageUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                print("Image Error: $error");
-                                return const Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        LucideIcons.imageOff,
-                                        size: 48,
-                                        color: AppColors.mutedForeground,
-                                      ),
-                                      SizedBox(height: 8),
-                                      Text(
-                                        "Gagal memuat gambar",
-                                        style: TextStyle(
-                                          color: AppColors.mutedForeground,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                              loadingBuilder:
-                                  (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Center(
-                                      child: CircularProgressIndicator(
-                                        value:
-                                            loadingProgress
-                                                    .expectedTotalBytes !=
-                                                null
-                                            ? loadingProgress
-                                                      .cumulativeBytesLoaded /
-                                                  loadingProgress
-                                                      .expectedTotalBytes!
-                                            : null,
-                                      ),
-                                    );
-                                  },
-                            )
-                          : const Center(
-                              child: Icon(
-                                LucideIcons.package,
-                                size: 64,
-                                color: AppColors.mutedForeground,
-                              ),
-                            ),
-                    ),
-                  ),
-                );
-              },
-            ),
-
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+            children: [
+              // Image — capped height so the key info stays on screen
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  height: 220,
+                  color: AppColors.muted,
+                  child: hasImage
+                      ? Image.network(
+                          item.imageUrl!,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const _NoImage(
+                            text: "Gambar gagal dimuat",
+                          ),
+                        )
+                      : const _NoImage(text: "Belum ada foto"),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                item.name,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  // Title & Code
-                  Text(
-                    item.name,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Text(
-                          item.code,
-                          style: const TextStyle(
-                            fontFamily: 'Monospace',
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          item.category ?? 'Umum',
-                          style: const TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  const SizedBox(height: 24),
-                  const Divider(),
-                  const SizedBox(height: 24),
+                  if (item.code.isNotEmpty) _Pill(item.code),
+                  _Pill(item.category ?? 'Umum'),
+                  StockBadge(item.stockDisplay),
+                ],
+              ),
+              const SizedBox(height: 24),
 
-                  // Description
-                  if (item.description != null &&
-                      item.description!.isNotEmpty) ...[
-                    _buildSectionTitle("Deskripsi Produk"),
-                    const SizedBox(height: 8),
-                    Text(
-                      item.description!,
-                      style: const TextStyle(
-                        color: AppColors.foreground,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    const SizedBox(height: 24),
-                  ],
-
-                  // Pricing
-                  _buildSectionTitle("Informasi Harga"),
-                  const SizedBox(height: 12),
-                  _buildInfoRow(
-                    "Harga Umum",
-                    currencyFormat.format(item.sellPrice),
-                    isHighlight: true,
+              // Prices
+              _Panel(
+                children: [
+                  _InfoRow(
+                    "Harga jual",
+                    _rupiah.format(item.sellPrice),
+                    strong: true,
                   ),
-                  _buildInfoRow(
-                    "Harga Bengkel",
-                    currencyFormat.format(item.priceWorkshop),
-                  ),
-                  // Only Admin can see buy price & margin
                   if (isAdmin) ...[
-                    _buildInfoRow(
-                      "Harga Beli (Modal)",
-                      currencyFormat.format(item.buyPrice),
-                    ),
-                    // Profit calculation
-                    if (item.sellPrice > item.buyPrice)
-                      _buildInfoRow(
-                        "Estimasi Margin",
-                        currencyFormat.format(item.sellPrice - item.buyPrice) +
-                            " (${((item.sellPrice - item.buyPrice) / item.buyPrice * 100).toStringAsFixed(1)}%)",
-                        isHighlight: true,
-                      ),
-                  ],
-
-                  const SizedBox(height: 24),
-
-                  // Stock & Location
-                  _buildSectionTitle("Stok & Lokasi"),
-                  const SizedBox(height: 12),
-
-                  // Display / Toko - with Quick Stock Buttons
-                  _buildStockCard(
-                    title: "Toko (Display)",
-                    icon: LucideIcons.store,
-                    iconColor: AppColors.primary,
-                    stock: item.stockDisplay,
-                    location: item.locationDisplay,
-                    onMinus: () => _adjustStock('display', -1),
-                    onPlus: () => _adjustStock('display', 1),
-                  ),
-
-                  // Warehouse / Gudang - with Quick Stock Buttons
-                  _buildStockCard(
-                    title: "Gudang",
-                    icon: LucideIcons.warehouse,
-                    iconColor: Colors.orange,
-                    stock: item.stockWarehouse,
-                    location: item.locationWarehouse,
-                    onMinus: () => _adjustStock('warehouse', -1),
-                    onPlus: () => _adjustStock('warehouse', 1),
-                  ),
-
-                  // Total Stock Summary
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(LucideIcons.boxes, color: AppColors.primary),
-                            SizedBox(width: 12),
-                            Text(
-                              "Total Stok",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          "${item.stockDisplay + item.stockWarehouse} Unit",
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Tags Section
-                  if (item.tags.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    const SizedBox(height: 24),
-                    _buildSectionTitle("Tags / Label"),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: item.tags
-                          .map(
-                            (tag) => Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: AppColors.border),
-                              ),
-                              child: Text(
-                                tag,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.foreground,
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList(),
+                    _InfoRow("Harga modal", _rupiah.format(item.buyPrice)),
+                    _InfoRow(
+                      "Untung per barang",
+                      item.buyPrice > 0
+                          ? "${_rupiah.format(margin)} (${(margin / item.buyPrice * 100).toStringAsFixed(1)}%)"
+                          : _rupiah.format(margin),
+                      color: margin < 0
+                          ? AppColors.destructiveStrong
+                          : AppColors.successStrong,
                     ),
                   ],
                 ],
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+
+              // Stock
+              _Panel(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                "Stok",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (item.locationDisplay != null &&
+                                item.locationDisplay!.isNotEmpty)
+                              Text(
+                                "Rak ${item.locationDisplay}",
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _StockButton(
+                              icon: LucideIcons.minus,
+                              tooltip: "Kurangi 1",
+                              busy: _isUpdating,
+                              onTap: item.stockDisplay > 0
+                                  ? () => _adjustStock('display', -1)
+                                  : null,
+                            ),
+                            SizedBox(
+                              width: 96,
+                              child: Text(
+                                "${item.stockDisplay}",
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w700,
+                                  fontFeatures: _tabular,
+                                ),
+                              ),
+                            ),
+                            _StockButton(
+                              icon: LucideIcons.plus,
+                              tooltip: "Tambah 1",
+                              busy: _isUpdating,
+                              onTap: () => _adjustStock('display', 1),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "Untuk koreksi cepat. Barang masuk dari supplier dicatat di Pembelian.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              if (item.description != null && item.description!.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                const _SectionTitle("Deskripsi"),
+                const SizedBox(height: 8),
+                Text(
+                  item.description!,
+                  style: const TextStyle(fontSize: 14, height: 1.5),
+                ),
+              ],
+
+              if (item.tags.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                const _SectionTitle("Tag pencarian"),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [for (final tag in item.tags) _Pill(tag)],
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-        color: AppColors.foreground,
-      ),
+class _NoImage extends StatelessWidget {
+  final String text;
+
+  const _NoImage({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(LucideIcons.package, size: 40, color: AppColors.mutedForeground),
+        const SizedBox(height: 8),
+        Text(
+          text,
+          style: const TextStyle(fontSize: 13, color: AppColors.mutedForeground),
+        ),
+      ],
     );
   }
+}
 
-  Widget _buildInfoRow(String label, String value, {bool isHighlight = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: AppColors.mutedForeground)),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: isHighlight ? 16 : 14,
-              color: isHighlight ? AppColors.primary : AppColors.foreground,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+class _Pill extends StatelessWidget {
+  final String text;
 
-  Widget _buildStockCard({
-    required String title,
-    required IconData icon,
-    required Color iconColor,
-    required int stock,
-    String? location,
-    required VoidCallback onMinus,
-    required VoidCallback onPlus,
-  }) {
+  const _Pill(this.text);
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: AppColors.foreground,
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String text;
+
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+    );
+  }
+}
+
+class _Panel extends StatelessWidget {
+  final List<Widget> children;
+
+  const _Panel({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              Icon(icon, color: iconColor),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-              Text(
-                "$stock Unit",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: stock <= 5 ? Colors.red : Colors.green,
-                ),
-              ),
-            ],
-          ),
-          if (location != null && location.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const SizedBox(width: 36),
-                Text(
-                  "Rak: $location",
-                  style: const TextStyle(
-                    color: AppColors.mutedForeground,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const Divider(indent: 16, endIndent: 16),
+            children[i],
           ],
-          const SizedBox(height: 12),
-          // Quick Stock Adjustment Buttons
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildStockButton(
-                icon: LucideIcons.minus,
-                color: Colors.red,
-                onTap: onMinus,
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool strong;
+  final Color? color;
+
+  const _InfoRow(this.label, this.value, {this.strong = false, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.mutedForeground,
               ),
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Text(
-                  "$stock",
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              _buildStockButton(
-                icon: LucideIcons.plus,
-                color: Colors.green,
-                onTap: onPlus,
-              ),
-            ],
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: strong ? 18 : 15,
+              fontWeight: strong ? FontWeight.w700 : FontWeight.w600,
+              color: color ?? AppColors.foreground,
+              fontFeatures: _tabular,
+            ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildStockButton({
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: color.withOpacity(0.1),
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: _isUpdating ? null : onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          child: _isUpdating
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(icon, color: color, size: 20),
+class _StockButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool busy;
+  final VoidCallback? onTap;
+
+  const _StockButton({
+    required this.icon,
+    required this.tooltip,
+    required this.busy,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 56,
+      height: 56,
+      child: IconButton.outlined(
+        tooltip: tooltip,
+        onPressed: busy ? null : onTap,
+        style: IconButton.styleFrom(
+          side: const BorderSide(color: AppColors.border),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
+        icon: busy
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(icon, size: 22, color: AppColors.foreground),
       ),
     );
   }

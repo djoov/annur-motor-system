@@ -15,6 +15,7 @@ import '../../ui/button.dart';
 import '../settings/settings_provider.dart';
 import 'pos_provider.dart';
 import '../debts/debt_provider.dart';
+import 'widgets/pos_widgets.dart' show posRupiah;
 
 class ReceiptPreviewScreen extends StatefulWidget {
   final Map<String, dynamic> transactionData;
@@ -33,6 +34,23 @@ class ReceiptPreviewScreen extends StatefulWidget {
 class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
   final ScreenshotController _screenshotController = ScreenshotController();
   bool _isSaving = false;
+
+  /// True while the transaction is being written — locks all buttons so a
+  /// double tap can't record the sale twice.
+  bool _isFinalizing = false;
+
+  static String _paymentLabel(String? method) {
+    switch (method) {
+      case 'cash':
+        return 'Tunai';
+      case 'transfer':
+        return 'Transfer';
+      case 'debt':
+        return 'Hutang';
+      default:
+        return method ?? '-';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,15 +72,15 @@ class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text("Struk Transaksi"),
-        centerTitle: true,
-        automaticallyImplyLeading: false, // Prevent back button
+        title: Text(widget.isDraft ? "Konfirmasi Transaksi" : "Struk Transaksi"),
+        automaticallyImplyLeading: !widget.isDraft,
         actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.download, color: Colors.black),
-            tooltip: 'Simpan ke Galeri',
-            onPressed: () => _saveToGallery(context),
-          ),
+          if (!widget.isDraft)
+            IconButton(
+              icon: const Icon(LucideIcons.download),
+              tooltip: 'Simpan ke Galeri',
+              onPressed: () => _saveToGallery(context),
+            ),
         ],
       ),
       body: Center(
@@ -82,7 +100,7 @@ class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 20,
                           offset: const Offset(0, 4),
                         ),
@@ -145,6 +163,13 @@ class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
                         _buildInfoRow("Tanggal", dateFormat.format(date)),
                         const SizedBox(height: 8),
                         _buildInfoRow("Pelanggan", customerName),
+                        const SizedBox(height: 8),
+                        _buildInfoRow(
+                          "Pembayaran",
+                          _paymentLabel(
+                            widget.transactionData['paymentMethod'] as String?,
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         _buildInfoRow(
                           "No. Transaksi",
@@ -220,7 +245,8 @@ class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
+                                color: Colors.black,
+                                fontFeatures: [FontFeature.tabularFigures()],
                               ),
                             ),
                           ],
@@ -245,38 +271,34 @@ class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
 
                 // Actions
                 if (widget.isDraft) ...[
-                  // DRAFT MODE (CONFIRMATION)
-                  // 1. Process & Print
+                  // DRAFT MODE (CONFIRMATION) — nothing is saved until one of
+                  // the first two buttons is pressed.
                   CustomButton(
-                    text: "Proses & Cetak",
+                    text: "Simpan & Cetak Struk",
                     icon: LucideIcons.printer,
-                    isLoading: settings.isLoading,
-                    onPressed: () async {
-                      await _finalizeAndAction(context, settings, print: true);
-                    },
+                    isLoading: _isFinalizing || settings.isLoading,
+                    onPressed: () =>
+                        _finalizeAndAction(context, settings, print: true),
                   ),
                   const SizedBox(height: 12),
-                  // 2. Process Only
                   CustomButton(
-                    text: "Selesai (Tanpa Cetak)",
-                    icon: LucideIcons.checkCircle,
-                    color: Colors.green,
-                    isLoading: settings.isLoading,
-                    onPressed: () async {
-                      await _finalizeAndAction(context, settings, print: false);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  // 3. Cancel
-                  CustomButton(
-                    text: "Batal / Kembali",
+                    text: "Simpan tanpa Cetak",
+                    icon: LucideIcons.circleCheck,
                     isOutline: true,
-                    color: Colors.red,
-                    onPressed: () {
-                      Navigator.of(
-                        context,
-                      ).pop(); // Just go back, cart is intact
-                    },
+                    onPressed: _isFinalizing || settings.isLoading
+                        ? null
+                        : () => _finalizeAndAction(
+                              context,
+                              settings,
+                              print: false,
+                            ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _isFinalizing
+                        ? null
+                        : () => Navigator.of(context).pop(), // cart is intact
+                    child: const Text("Kembali ke Keranjang"),
                   ),
                 ] else ...[
                   // HISTORY / COMPLETED MODE
@@ -295,19 +317,16 @@ class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
                   ),
                   const SizedBox(height: 12),
                   CustomButton(
-                    text: "Simpan Gambar",
+                    text: "Simpan Gambar Struk",
                     icon: LucideIcons.image,
-                    color: Colors.green,
+                    isOutline: true,
                     isLoading: _isSaving,
                     onPressed: () => _saveToGallery(context),
                   ),
-                  const SizedBox(height: 12),
-                  CustomButton(
-                    text: "Tutup",
-                    isOutline: true,
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text("Tutup"),
                   ),
                 ],
               ],
@@ -339,17 +358,24 @@ class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
     SettingsProvider settings, {
     required bool print,
   }) async {
+    if (_isFinalizing) return;
+    setState(() => _isFinalizing = true);
+
     final posProvider = Provider.of<PosProvider>(context, listen: false);
+    final messenger = ScaffoldMessenger.of(context);
 
     try {
       // 1. Finalize (Write DB)
       await posProvider.finalizeTransaction(widget.transactionData);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        setState(() => _isFinalizing = false);
+        messenger.showSnackBar(
           SnackBar(
-            content: Text("Gagal: $e"),
-            backgroundColor: Colors.red,
+            content: Text(
+              "Transaksi gagal disimpan: ${e.toString().replaceFirst('Exception: ', '')}",
+            ),
+            backgroundColor: AppColors.destructiveStrong,
             duration: const Duration(seconds: 4),
           ),
         );
@@ -388,7 +414,16 @@ class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
       );
     }
 
-    // 4. Finish
+    // 4. Finish — the messenger outlives this route, so the message stays
+    // visible on the POS screen after we close the preview.
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          "Transaksi ${posRupiah.format(widget.transactionData['totalAmount'] as int)} tersimpan",
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
     if (mounted) {
       Navigator.of(context).pop(); // Close Preview
     }
@@ -425,7 +460,7 @@ class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text("Struk disimpan di: $outputFile"),
-                backgroundColor: Colors.green,
+                backgroundColor: AppColors.success,
                 action: SnackBarAction(
                   label: 'Buka',
                   textColor: Colors.white,
@@ -460,7 +495,7 @@ class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text("Berhasil disimpan ke Galeri"),
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.success,
             ),
           );
         }
@@ -469,7 +504,7 @@ class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
       print("Error saving image: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Gagal: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("Gagal: $e"), backgroundColor: AppColors.destructive),
         );
       }
     } finally {

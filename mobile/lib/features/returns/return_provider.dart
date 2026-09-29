@@ -79,8 +79,9 @@ class ReturnProvider extends ChangeNotifier {
         // Calculate New Stock Logic (Handles Legacy Data)
         final data = itemDocCheck.data() as Map<String, dynamic>;
 
-        // If qty_display is missing, use stock.
-        final currentDisplayStock = data['qty_display'] ?? data['stock'] ?? 0;
+        // Same precedence as Item.fromFirestore: `stock` is the source of truth.
+        final currentDisplayStock =
+            ((data['stock'] ?? data['qty_display']) as num?)?.toInt() ?? 0;
         final newStock = currentDisplayStock + qty;
 
         print(

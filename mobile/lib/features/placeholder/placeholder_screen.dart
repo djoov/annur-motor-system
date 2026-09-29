@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme.dart';
 class PlaceholderScreen extends StatelessWidget {
   final String title;
 
@@ -13,7 +14,7 @@ class PlaceholderScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.construction, size: 64, color: Colors.grey),
+            const Icon(Icons.construction, size: 64, color: AppColors.mutedForeground),
             const SizedBox(height: 16),
             Text(
               "Fitur $title\nSegera Hadir",
@@ -21,7 +22,7 @@ class PlaceholderScreen extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey,
+                color: AppColors.mutedForeground,
               ),
             ),
           ],

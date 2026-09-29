@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/pos/pos_screen.dart';
 import '../features/history/history_screen.dart';
-import '../features/placeholder/placeholder_screen.dart';
 import '../features/scan/scan_screen.dart';
 import '../features/items/items_list_screen.dart';
 import '../features/categories/categories_list_screen.dart';
@@ -137,12 +136,14 @@ class AppDrawer extends StatelessWidget {
                   leading: const Icon(LucideIcons.barChart3),
                   title: const Text("Laporan"),
                   children: [
-                    _buildNavItem(
-                      context,
-                      "Penjualan Harian",
-                      LucideIcons.fileText,
-                      DailySalesScreen(),
-                    ),
+                    // Shows profit — owner only
+                    if (authProvider.isAdmin)
+                      _buildNavItem(
+                        context,
+                        "Penjualan Harian",
+                        LucideIcons.fileText,
+                        DailySalesScreen(),
+                      ),
                     _buildNavItem(
                       context,
                       "Riwayat Transaksi",
@@ -155,13 +156,6 @@ class AppDrawer extends StatelessWidget {
                       LucideIcons.alertTriangle,
                       const LowStockReportScreen(),
                     ),
-                    if (authProvider.isAdmin)
-                      _buildNavItem(
-                        context,
-                        "Keuntungan",
-                        LucideIcons.fileText,
-                        const PlaceholderScreen(title: "Keuntungan"),
-                      ),
                   ],
                 ),
 

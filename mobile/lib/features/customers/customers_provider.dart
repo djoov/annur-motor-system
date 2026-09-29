@@ -8,6 +8,10 @@ class CustomersProvider extends ChangeNotifier {
   List<CustomerModel> _customers = [];
   bool _isLoading = false;
 
+  CustomersProvider() {
+    fetchCustomers();
+  }
+
   List<CustomerModel> get customers => _customers;
   bool get isLoading => _isLoading;
 
@@ -16,10 +20,16 @@ class CustomersProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final snapshot = await _db.collection('customers').orderBy('name').get();
-      _customers = snapshot.docs
-          .map((doc) => CustomerModel.fromFirestore(doc))
-          .toList();
+      final snapshot = await _db.collection('customers').get();
+      _customers = snapshot.docs.map((doc) {
+        try {
+          return CustomerModel.fromFirestore(doc);
+        } catch (e) {
+          print("Error parsing customer ${doc.id}: $e");
+          return null;
+        }
+      }).whereType<CustomerModel>().toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     } catch (e) {
       print("Error fetching customers: $e");
     } finally {

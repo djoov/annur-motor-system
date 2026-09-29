@@ -14,14 +14,54 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function userDocPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function myRole() {
+      return get(userDocPath()).data.get('role', '');
+    }
+
+    // Akun yang sudah disetujui admin (role 'admin' atau 'staff').
+    // Akun baru berstatus 'pending' dan tidak bisa mengakses data toko.
+    function isStaff() {
+      return isAuthenticated()
+        && exists(userDocPath())
+        && myRole() in ['admin', 'staff'];
+    }
+
+    function isAdmin() {
+      return isAuthenticated()
+        && exists(userDocPath())
+        && myRole() == 'admin';
+    }
+
+    // ============================
+    // Users
+    // ============================
+    // - Akun baru hanya boleh membuat dokumennya sendiri dengan role 'pending'
+    // - User boleh mengubah profilnya sendiri, tapi TIDAK boleh mengubah role
+    // - Hanya admin yang boleh mengubah role / menghapus user lain
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isStaff();
+      allow create: if isAdmin()
+        || (isOwner(userId) && request.resource.data.get('role', '') == 'pending');
+      allow update: if isAdmin()
+        || (isOwner(userId)
+            && request.resource.data.get('role', '') == resource.data.get('role', ''));
+      allow delete: if isAdmin();
+    }
+
     // ============================
     // Items (Produk / Sparepart)
     // ============================
-    // Public: bisa baca daftar produk (untuk katalog & landing page)
-    // Write: hanya user yang sudah login (staf)
+    // Read publik untuk katalog & landing page web.
+    // CATATAN: field buyPrice ikut terbaca publik (Firestore tidak punya
+    // aturan per-field untuk read).
     match /items/{itemId} {
       allow read: if true;
-      allow create, update, delete: if isAuthenticated();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
     }
 
     // ============================
@@ -29,38 +69,71 @@ service cloud.firestore {
     // ============================
     match /categories/{categoryId} {
       allow read: if true;
-      allow create, update, delete: if isAuthenticated();
+      allow create, update, delete: if isStaff();
     }
 
     // ============================
     // Transactions (Penjualan)
     // ============================
-    // Hanya user yang login bisa baca & tulis transaksi
-    // Data sensitif: buyPrice, profit, dll.
     match /transactions/{transactionId} {
-      allow read, write: if isAuthenticated();
+      allow read, create, update: if isStaff();
+      allow delete: if isAdmin();
     }
 
     // ============================
-    // Customers (Pelanggan)
+    // Master & operasional (staff yang disetujui)
     // ============================
-    match /customers/{customerId} {
-      allow read, write: if isAuthenticated();
+    match /customers/{docId} {
+      allow read, write: if isStaff();
     }
 
-    // ============================
-    // Debts (Piutang / Hutang)
-    // ============================
+    match /suppliers/{docId} {
+      allow read, write: if isStaff();
+    }
+
+    match /purchases/{docId} {
+      allow read, write: if isStaff();
+    }
+
+    match /stock_requests/{docId} {
+      allow read, write: if isStaff();
+    }
+
+    match /stock_opnames/{docId} {
+      allow read, write: if isStaff();
+    }
+
+    match /itemMovements/{docId} {
+      allow read, write: if isStaff();
+    }
+
+    // Piutang: staff bisa catat & bayar, hanya admin yang hapus
     match /debts/{debtId} {
-      allow read, write: if isAuthenticated();
+      allow read, create, update: if isStaff();
+      allow delete: if isAdmin();
     }
 
     // ============================
-    // User Profiles / Settings
+    // Riwayat lain yang ikut dihapus oleh "Reset Data" (admin)
     // ============================
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+    match /stock_moves/{docId} {
+      allow read, create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /return_transactions/{docId} {
+      allow read, create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{docId} {
+      allow read, create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /stock_opname/{docId} {
+      allow read, create, update: if isStaff();
+      allow delete: if isAdmin();
     }
 
     // ============================
@@ -68,15 +141,15 @@ service cloud.firestore {
     // ============================
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isStaff();
     }
 
     // ============================
-    // Visitor Locations (dari LocationTracker)
+    // Visitor Locations (dari LocationTracker web)
     // ============================
     match /visitor_locations/{locationId} {
       allow create: if true;  // Pengunjung bisa mengirim lokasi
-      allow read, update, delete: if isAuthenticated();
+      allow read, update, delete: if isStaff();
     }
 
     // ============================

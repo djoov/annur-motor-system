@@ -59,7 +59,7 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text("Gagal: $error"),
-                      backgroundColor: Colors.red,
+                      backgroundColor: AppColors.destructive,
                     ),
                   );
                 }
@@ -99,7 +99,7 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
                 );
               }
             },
-            child: const Text("Tolak", style: TextStyle(color: Colors.red)),
+            child: const Text("Tolak", style: TextStyle(color: AppColors.destructiveStrong)),
           ),
         ],
       ),
@@ -122,11 +122,11 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(LucideIcons.checkCircle, size: 64, color: Colors.grey),
+                  Icon(LucideIcons.checkCircle, size: 64, color: AppColors.mutedForeground),
                   SizedBox(height: 16),
                   Text(
                     "Tidak ada permintaan tertunda.",
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(color: AppColors.mutedForeground),
                   ),
                 ],
               ),
@@ -170,7 +170,7 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withOpacity(0.1),
+                                color: AppColors.primary.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
@@ -187,14 +187,14 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
                         Text(
                           "Kode: ${req.itemId}",
                           style: const TextStyle(
-                            color: Colors.grey,
+                            color: AppColors.mutedForeground,
                             fontSize: 13,
                           ),
                         ),
                         Text(
                           "Oleh: ${req.requesterName} • ${DateFormat('dd MMM HH:mm').format(req.createdAt)}",
                           style: const TextStyle(
-                            color: Colors.grey,
+                            color: AppColors.mutedForeground,
                             fontSize: 13,
                           ),
                         ),
@@ -207,14 +207,14 @@ class _StockRequestsScreenState extends State<StockRequestsScreen> {
                                 icon: const Icon(
                                   LucideIcons.x,
                                   size: 16,
-                                  color: Colors.red,
+                                  color: AppColors.destructive,
                                 ),
                                 label: const Text(
                                   "Tolak",
-                                  style: TextStyle(color: Colors.red),
+                                  style: TextStyle(color: AppColors.destructiveStrong),
                                 ),
                                 style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: Colors.red),
+                                  side: const BorderSide(color: AppColors.destructiveStrong),
                                 ),
                               ),
                             ),

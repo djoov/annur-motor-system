@@ -21,7 +21,6 @@ import '../../features/reports/daily_sales/daily_sales_screen.dart';
 import '../../features/debts/debts_list_screen.dart';
 import '../../features/auth/users_list_screen.dart';
 import '../../features/stock_request/stock_request_screen.dart';
-import '../../features/placeholder/placeholder_screen.dart';
 
 class DesktopSidebar extends StatelessWidget {
   final String activeRoute; // e.g., '/dashboard', '/pos', '/items'
@@ -36,10 +35,10 @@ class DesktopSidebar extends StatelessWidget {
     return Container(
       width: 250,
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B), // Slate 800
+        color: AppColors.foreground, // Slate 800
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(2, 0),
           ),
@@ -58,7 +57,7 @@ class DesktopSidebar extends StatelessWidget {
                 const SizedBox(width: 16),
                 const Expanded(
                   child: Text(
-                    "MekanikHub",
+                    "Annur App",
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 20,
@@ -157,12 +156,14 @@ class DesktopSidebar extends StatelessWidget {
                     title: "Laporan",
                     icon: LucideIcons.barChart3,
                     children: [
-                      _buildSubItem(
-                        context,
-                        "Penjualan Harian",
-                        DailySalesScreen(),
-                        isActive: activeRoute == '/daily_sales',
-                      ),
+                      // Shows profit — owner only
+                      if (isAdmin)
+                        _buildSubItem(
+                          context,
+                          "Penjualan Harian",
+                          DailySalesScreen(),
+                          isActive: activeRoute == '/daily_sales',
+                        ),
                       _buildSubItem(
                         context,
                         "Riwayat Transaksi",
@@ -175,13 +176,6 @@ class DesktopSidebar extends StatelessWidget {
                         const LowStockReportScreen(),
                         isActive: activeRoute == '/low_stock',
                       ),
-                      if (isAdmin)
-                        _buildSubItem(
-                          context,
-                          "Keuntungan",
-                          const PlaceholderScreen(title: "Keuntungan"),
-                          isActive: activeRoute == '/profit',
-                        ),
                     ],
                   ),
 
@@ -318,7 +312,7 @@ class DesktopSidebar extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       decoration: isActive
           ? BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             )
           : null,

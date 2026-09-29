@@ -6,20 +6,18 @@ class Item {
   final String code;
   final int sellPrice;
   final int buyPrice;
-  // final int stock; // Removed, now a getter
+  final int stockDisplay; // Unified Single Stock
   final String? category;
   final String? imageUrl;
-  final int priceWorkshop;
-  final int stockDisplay;
-  final int stockWarehouse;
   final List<String> tags;
-
   final String? locationDisplay;
-  final String? locationWarehouse;
   final String? description;
 
-  // Computed for backward compatibility
+  // Backward compatibility getters
   int get stock => stockDisplay;
+  int get stockWarehouse => 0;
+  int get priceWorkshop => sellPrice;
+  String? get locationWarehouse => locationDisplay;
 
   Item({
     required this.id,
@@ -28,37 +26,49 @@ class Item {
     required this.sellPrice,
     required this.buyPrice,
     required this.stockDisplay,
-    this.priceWorkshop = 0,
-    this.stockWarehouse = 0,
+    int? priceWorkshop,
+    int? stockWarehouse,
     this.tags = const [],
     this.category,
     this.imageUrl,
     this.locationDisplay,
-    this.locationWarehouse,
+    String? locationWarehouse,
     this.description,
   });
 
   factory Item.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = (doc.data() as Map<String, dynamic>?) ?? {};
+
+    int parseInt(dynamic value, [int defaultValue = 0]) {
+      if (value == null) return defaultValue;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) {
+        return int.tryParse(value) ??
+            double.tryParse(value)?.toInt() ??
+            defaultValue;
+      }
+      return defaultValue;
+    }
+
+    // Unified stock calculation (takes 'stock', 'qty_display', or falls back to 'qty_warehouse')
+    final unifiedStock = parseInt(data['stock'] ?? data['qty_display'] ?? data['qty_warehouse']);
+    final unifiedLocation = data['location_display']?.toString() ?? data['location']?.toString() ?? data['location_warehouse']?.toString();
+
     return Item(
       id: doc.id,
-      name: data['name'] ?? '',
-      code: data['code'] ?? '',
-      sellPrice: data['sellPrice'] ?? 0,
-      buyPrice: data['buyPrice'] ?? 0,
-      stockDisplay:
-          data['qty_display'] ?? data['stock'] ?? 0, // Fallback to old stock
-      stockWarehouse: data['qty_warehouse'] ?? 0,
-      priceWorkshop:
-          data['price_workshop'] ??
-          data['sellPrice'] ??
-          0, // Default to general price
-      tags: List<String>.from(data['tags'] ?? []),
-      category: data['category'],
-      imageUrl: data['imageUrl'],
-      locationDisplay: data['location_display'],
-      locationWarehouse: data['location_warehouse'],
-      description: data['description'],
+      name: data['name']?.toString() ?? '',
+      code: data['code']?.toString() ?? '',
+      sellPrice: parseInt(data['sellPrice']),
+      buyPrice: parseInt(data['buyPrice']),
+      stockDisplay: unifiedStock,
+      tags: data['tags'] is List
+          ? (data['tags'] as List).map((e) => e.toString()).toList()
+          : [],
+      category: data['category']?.toString(),
+      imageUrl: data['imageUrl']?.toString(),
+      locationDisplay: unifiedLocation,
+      description: data['description']?.toString(),
     );
   }
 
@@ -68,15 +78,13 @@ class Item {
       'code': code,
       'sellPrice': sellPrice,
       'buyPrice': buyPrice,
+      'stock': stockDisplay,
       'qty_display': stockDisplay,
-      'stock': stockDisplay, // Keep legacy field synced
-      'qty_warehouse': stockWarehouse,
-      'price_workshop': priceWorkshop,
       'tags': tags,
       'category': category,
       'imageUrl': imageUrl,
       'location_display': locationDisplay,
-      'location_warehouse': locationWarehouse,
+      'location': locationDisplay,
       'description': description,
     };
   }
@@ -93,13 +101,10 @@ class CartItem extends Item {
         sellPrice: item.sellPrice,
         buyPrice: item.buyPrice,
         stockDisplay: item.stockDisplay,
-        stockWarehouse: item.stockWarehouse,
-        priceWorkshop: item.priceWorkshop,
         tags: item.tags,
         category: item.category,
         imageUrl: item.imageUrl,
         locationDisplay: item.locationDisplay,
-        locationWarehouse: item.locationWarehouse,
         description: item.description,
       );
 }
@@ -107,11 +112,39 @@ class CartItem extends Item {
 class Customer {
   final String id;
   final String name;
+  final String phone;
+  final String address;
+  final int debt;
 
-  Customer({required this.id, required this.name});
+  Customer({
+    required this.id,
+    required this.name,
+    required this.phone,
+    required this.address,
+    this.debt = 0,
+  });
 
   factory Customer.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return Customer(id: doc.id, name: data['name'] ?? '');
+    final data = (doc.data() as Map<String, dynamic>?) ?? {};
+
+    int parseInt(dynamic value, [int defaultValue = 0]) {
+      if (value == null) return defaultValue;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) {
+        return int.tryParse(value) ??
+            double.tryParse(value)?.toInt() ??
+            defaultValue;
+      }
+      return defaultValue;
+    }
+
+    return Customer(
+      id: doc.id,
+      name: data['name']?.toString() ?? '',
+      phone: data['phone']?.toString() ?? '',
+      address: data['address']?.toString() ?? '',
+      debt: parseInt(data['debt']),
+    );
   }
 }

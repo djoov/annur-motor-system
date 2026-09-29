@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme.dart';
+import 'core/app_fonts.dart';
 import 'core/services/notification_service.dart';
 import 'features/auth/auth_provider.dart';
 import 'features/pos/pos_provider.dart';
@@ -43,6 +44,8 @@ const firebaseOptions = FirebaseOptions(
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Real font weights before the first frame (see AppFonts).
+  await AppFonts.load();
   try {
     if (!kIsWeb && (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
       await NotificationService().init();
@@ -57,7 +60,7 @@ void main() async {
     WindowOptions windowOptions = const WindowOptions(
       minimumSize: Size(800, 600),
       center: true,
-      title: 'MekanikHub',
+      title: 'Annur App',
     );
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();
@@ -123,7 +126,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => StockOpnameProvider()),
       ],
       child: MaterialApp(
-        title: 'MekanikHub',
+        title: 'Annur App',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         scrollBehavior: AppScrollBehavior(),

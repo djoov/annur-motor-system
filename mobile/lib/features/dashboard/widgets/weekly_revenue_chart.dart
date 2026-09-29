@@ -46,7 +46,7 @@ class WeeklyRevenueChart extends StatelessWidget {
               backDrawRodData: BackgroundBarChartRodData(
                 show: true,
                 toY: maxY * 1.2, // Make background slightly taller
-                color: Colors.grey.withOpacity(0.1),
+                color: AppColors.mutedForeground.withValues(alpha: 0.1),
               ),
             ),
           ],
@@ -73,7 +73,7 @@ class WeeklyRevenueChart extends StatelessWidget {
                   const TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.bold,
-                    fontSize: 10,
+                    fontSize: 12,
                   ),
                 );
               },
@@ -93,7 +93,7 @@ class WeeklyRevenueChart extends StatelessWidget {
                       child: Text(
                         DateFormat('E', 'id_ID').format(date), // Mon, Tue...
                         style: const TextStyle(
-                          color: Colors.grey,
+                          color: AppColors.mutedForeground,
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),

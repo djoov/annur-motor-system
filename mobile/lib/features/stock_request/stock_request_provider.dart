@@ -209,19 +209,21 @@ class StockRequestProvider extends ChangeNotifier {
           throw Exception("Item not found");
         }
 
-        final itemData = itemSnapshot.data() as Map<String, dynamic>;
-        final currentWarehouse =
-            (itemData['qty_warehouse'] as num?)?.toInt() ?? 0;
-        final currentDisplay = (itemData['qty_display'] as num?)?.toInt() ?? 0;
-
-        if (currentWarehouse < request.requestQty) {
-          throw Exception("Stok Gudang tidak cukup! (Sisa: $currentWarehouse)");
-        }
-
-        // Move Stock
+        // Stock is a single unified number now (`stock`, mirrored in
+        // `qty_display`); warehouse stock is no longer tracked. Approving a
+        // request means the goods are on the shelf, so add them to stock.
+        // Read the same fallback chain as Item.fromFirestore so older items
+        // without a `stock` field are counted correctly.
+        final data = itemSnapshot.data() as Map<String, dynamic>;
+        final current =
+            ((data['stock'] ?? data['qty_display'] ?? data['qty_warehouse'])
+                        as num?)
+                    ?.toInt() ??
+                0;
+        final updated = current + request.requestQty;
         transaction.update(itemRef, {
-          'qty_warehouse': currentWarehouse - request.requestQty,
-          'qty_display': currentDisplay + request.requestQty,
+          'stock': updated,
+          'qty_display': updated,
           'updatedAt': FieldValue.serverTimestamp(),
         });
 

@@ -1,18 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../../ui/button.dart';
-import '../../ui/input.dart';
 import '../../core/theme.dart';
+import '../../ui/app_list.dart';
+import '../../ui/app_form.dart';
+import '../../ui/stock_badge.dart';
 import '../suppliers/suppliers_provider.dart';
 import '../items/items_provider.dart';
+import '../scan/scan_screen.dart';
 import 'purchases_provider.dart';
 import 'purchase_model.dart';
 import '../pos/models/pos_models.dart';
 
+const _tabular = [FontFeature.tabularFigures()];
+
+final _rupiah = NumberFormat.currency(
+  locale: 'id_ID',
+  symbol: 'Rp ',
+  decimalDigits: 0,
+);
+
+/// Record goods bought from a supplier; saving adds the quantities to stock.
 class PurchaseEntryScreen extends StatefulWidget {
-  const PurchaseEntryScreen({Key? key}) : super(key: key);
+  const PurchaseEntryScreen({super.key});
 
   @override
   State<PurchaseEntryScreen> createState() => _PurchaseEntryScreenState();
@@ -21,309 +33,428 @@ class PurchaseEntryScreen extends StatefulWidget {
 class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
   String? _selectedSupplierId;
   String _selectedSupplierName = '';
-
-  // List of items being purchased
   final List<PurchaseItem> _cart = [];
+  final _invoiceController = TextEditingController();
+  final _searchController = TextEditingController();
+  bool _isSaving = false;
 
-  // Temporary fields for adding item
-  String? _selectedItemId;
-  String _selectedItemName = '';
-  final TextEditingController _quantityController = TextEditingController();
-  final TextEditingController _buyPriceController = TextEditingController();
-  final TextEditingController _invoiceController = TextEditingController();
+  int get _total => _cart.fold(0, (s, i) => s + i.quantity * i.buyPrice);
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(() => setState(() {}));
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<SuppliersProvider>(context, listen: false).fetchSuppliers();
-      Provider.of<ItemsProvider>(context, listen: false).fetchItems();
+      context.read<SuppliersProvider>().fetchSuppliers();
+      context.read<ItemsProvider>().fetchItems();
     });
   }
 
   @override
   void dispose() {
-    _quantityController.dispose();
-    _buyPriceController.dispose();
     _invoiceController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  void _addItem() {
-    if (_selectedItemId == null ||
-        _quantityController.text.isEmpty ||
-        _buyPriceController.text.isEmpty)
-      return;
-
-    final qty = int.tryParse(_quantityController.text) ?? 0;
-    final price = int.tryParse(_buyPriceController.text) ?? 0;
-
-    if (qty > 0 && price > 0) {
-      setState(() {
-        _cart.add(
-          PurchaseItem(
-            itemId: _selectedItemId!,
-            name: _selectedItemName,
-            quantity: qty,
-            buyPrice: price,
-          ),
-        );
-        // Reset inputs
-        _selectedItemId = null;
-        _selectedItemName = '';
-        _quantityController.clear();
-        _buyPriceController.clear();
-      });
+  Future<void> _scan() async {
+    final code = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScanScreen(returnCodeOnly: true)),
+    );
+    if (code is! String || !mounted) return;
+    final item = context.read<ItemsProvider>().findByCode(code);
+    if (item != null) {
+      _showAddSheet(item);
+    } else {
+      showErrorSnack(context, "Kode $code belum terdaftar. Tambahkan dulu di Produk.");
     }
   }
 
-  void _removeItem(int index) {
-    setState(() {
-      _cart.removeAt(index);
-    });
+  void _showAddSheet(Item item) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _AddItemSheet(
+        item: item,
+        onAdd: (qty, price) {
+          setState(() {
+            _cart.add(PurchaseItem(
+              itemId: item.id,
+              name: item.name,
+              quantity: qty,
+              buyPrice: price,
+            ));
+            _searchController.clear();
+          });
+        },
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    if (_selectedSupplierId == null) {
+      showErrorSnack(context, "Pilih supplier dulu");
+      return;
+    }
+    final provider = context.read<PurchasesProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    setState(() => _isSaving = true);
+    final success = await provider.createPurchase(
+      _invoiceController.text.trim().isEmpty
+          ? "AUTO-${DateTime.now().millisecondsSinceEpoch}"
+          : _invoiceController.text.trim(),
+      _selectedSupplierId!,
+      _selectedSupplierName,
+      _cart,
+    );
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+
+    if (success) {
+      navigator.pop();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            "Pembelian ${_rupiah.format(_total)} disimpan, stok bertambah",
+          ),
+        ),
+      );
+    } else {
+      showErrorSnack(context, "Pembelian gagal disimpan. Coba lagi.");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final supplierProvider = Provider.of<SuppliersProvider>(context);
-    final itemProvider = Provider.of<ItemsProvider>(context);
-    final purchaseProvider = Provider.of<PurchasesProvider>(context);
-
-    final currencyFormat = NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp ',
-      decimalDigits: 0,
-    );
+    final suppliers = context.watch<SuppliersProvider>().suppliers;
+    final items = context.watch<ItemsProvider>().items;
+    final q = _searchController.text.trim().toLowerCase();
+    final results = q.isEmpty
+        ? const <Item>[]
+        : items
+            .where((i) =>
+                i.name.toLowerCase().contains(q) ||
+                i.code.toLowerCase().contains(q))
+            .take(30)
+            .toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Input Pembelian")),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+      appBar: AppBar(title: const Text("Catat Pembelian")),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: _selectedSupplierId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: "Supplier",
+                  prefixIcon: Icon(LucideIcons.truck, size: 20),
+                ),
+                hint: Text(suppliers.isEmpty
+                    ? "Belum ada supplier — tambah di menu Supplier"
+                    : "Pilih supplier"),
+                items: [
+                  for (final s in suppliers)
+                    DropdownMenuItem(value: s.id, child: Text(s.name)),
+                ],
+                onChanged: (value) => setState(() {
+                  _selectedSupplierId = value;
+                  _selectedSupplierName =
+                      suppliers.firstWhere((s) => s.id == value).name;
+                }),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _invoiceController,
+                decoration: const InputDecoration(
+                  labelText: "Nomor faktur (opsional)",
+                  prefixIcon: Icon(LucideIcons.receiptText, size: 20),
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                "Barang yang dibeli",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Row(
                 children: [
-                  // 0. Invoice Number
-                  const Text(
-                    "Nomor Faktur (Opsional)",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  CustomInput(
-                    placeholder: "Contoh: INV-001",
-                    controller: _invoiceController,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // 1. Select Supplier
-                  const Text(
-                    "Pilih Supplier",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: _selectedSupplierId,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: AppColors.background,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
+                  Expanded(
+                    child: AppSearchField(
+                      controller: _searchController,
+                      hint: "Cari barang",
                     ),
-                    hint: const Text("Pilih Supplier"),
-                    items: supplierProvider.suppliers.map((s) {
-                      return DropdownMenuItem(value: s.id, child: Text(s.name));
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedSupplierId = value;
-                        _selectedSupplierName = supplierProvider.suppliers
-                            .firstWhere((s) => s.id == value)
-                            .name;
-                      });
-                    },
                   ),
-                  const SizedBox(height: 24),
-
-                  // 2. Add Items
-                  const Text(
-                    "Tambah Barang",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Item Selection
-                  DropdownButtonFormField<String>(
-                    value: _selectedItemId,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: AppColors.background,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                    hint: const Text("Pilih Barang"),
-                    items: itemProvider.items.map((i) {
-                      return DropdownMenuItem(
-                        value: i.id,
-                        child: Text("${i.name} (Stok: ${i.stock})"),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedItemId = value;
-                        final item = itemProvider.items.firstWhere(
-                          (i) => i.id == value,
-                        );
-                        _selectedItemName = item.name;
-                        _buyPriceController.text = item.buyPrice
-                            .toString(); // Default to current buy price
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  Row(
-                    children: [
-                      Expanded(
-                        child: CustomInput(
-                          placeholder: "Jumlah",
-                          controller: _quantityController,
-                          keyboardType: TextInputType.number,
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: IconButton.filled(
+                      onPressed: _scan,
+                      tooltip: "Scan barcode",
+                      style: IconButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: CustomInput(
-                          placeholder: "Harga Beli / Unit",
-                          controller: _buyPriceController,
-                          keyboardType: TextInputType.number,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  CustomButton(
-                    text: "Tambah ke Daftar",
-                    onPressed: _addItem,
-                    isOutline: true,
-                  ),
-
-                  // 3. Item List
-                  if (_cart.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    const Text(
-                      "Daftar Barang Dibeli",
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      icon: const Icon(LucideIcons.scanLine, size: 24),
                     ),
-                    const SizedBox(height: 8),
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _cart.length,
-                      itemBuilder: (context, index) {
-                        final item = _cart[index];
-                        return Card(
-                          elevation: 0,
-                          color: AppColors.muted.withOpacity(0.5),
-                          child: ListTile(
-                            title: Text(
-                              item.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: Text(
-                              "${item.quantity} x ${currencyFormat.format(item.buyPrice)}",
-                            ),
-                            trailing: IconButton(
-                              icon: const Icon(
-                                LucideIcons.trash2,
-                                color: Colors.red,
-                              ),
-                              onPressed: () => _removeItem(index),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                  ),
                 ],
               ),
-            ),
-          ),
-
-          // Bottom Action
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: AppColors.border)),
-            ),
-            child: SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              if (q.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Material(
+                  color: AppColors.surface,
+                  clipBehavior: Clip.antiAlias,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: AppColors.border),
+                  ),
+                  child: results.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text(
+                            "Barang tidak ditemukan.",
+                            style: TextStyle(color: AppColors.mutedForeground),
+                          ),
+                        )
+                      : Column(
+                          children: [
+                            for (var i = 0; i < results.length; i++) ...[
+                              if (i > 0)
+                                const Divider(indent: 16, endIndent: 16),
+                              ListTile(
+                                title: Text(results[i].name),
+                                subtitle: Text(results[i].code),
+                                trailing: StockBadge(results[i].stockDisplay),
+                                onTap: () => _showAddSheet(results[i]),
+                              ),
+                            ],
+                          ],
+                        ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              if (_cart.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    "Belum ada barang. Cari atau scan barang di atas.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, color: AppColors.mutedForeground),
+                  ),
+                )
+              else
+                Material(
+                  color: AppColors.surface,
+                  clipBehavior: Clip.antiAlias,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: AppColors.border),
+                  ),
+                  child: Column(
                     children: [
-                      const Text(
-                        "Total Pembelian",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        currencyFormat.format(
-                          _cart.fold<int>(
-                            0,
-                            (sum, item) =>
-                                sum + (item.quantity * item.buyPrice),
+                      for (var i = 0; i < _cart.length; i++) ...[
+                        if (i > 0) const Divider(indent: 16, endIndent: 16),
+                        ListTile(
+                          contentPadding:
+                              const EdgeInsets.only(left: 16, right: 4),
+                          title: Text(
+                            _cart[i].name,
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                          subtitle: Text(
+                            "${_cart[i].quantity} × ${_rupiah.format(_cart[i].buyPrice)}",
+                            style: const TextStyle(fontFeatures: _tabular),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _rupiah.format(
+                                    _cart[i].quantity * _cart[i].buyPrice),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontFeatures: _tabular,
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: "Hapus",
+                                icon: const Icon(LucideIcons.x, size: 18),
+                                onPressed: () =>
+                                    setState(() => _cart.removeAt(i)),
+                              ),
+                            ],
                           ),
                         ),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color: AppColors.primary,
-                        ),
-                      ),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  CustomButton(
-                    text: "Simpan Transaksi",
-                    isLoading: purchaseProvider.isLoading,
-                    onPressed: _cart.isEmpty || _selectedSupplierId == null
-                        ? null
-                        : () async {
-                            final success = await purchaseProvider.createPurchase(
-                              _invoiceController.text.isEmpty
-                                  ? "AUTO-${DateTime.now().millisecondsSinceEpoch}"
-                                  : _invoiceController.text,
-                              _selectedSupplierId!,
-                              _selectedSupplierName,
-                              _cart,
-                            );
-                            if (success && context.mounted) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("Pembelian berhasil disimpan"),
-                                ),
-                              );
-                            }
-                          },
+                ),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          12,
+          16,
+          12 + MediaQuery.of(context).padding.bottom,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    "Total · ${_cart.length} barang",
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
-                ],
+                ),
+                Text(
+                  _rupiah.format(_total),
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: _tabular,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: _cart.isEmpty || _isSaving ? null : _save,
+                icon: _isSaving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(LucideIcons.save, size: 20),
+                label: const Text("Simpan & Tambah Stok"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddItemSheet extends StatefulWidget {
+  final Item item;
+  final void Function(int qty, int price) onAdd;
+
+  const _AddItemSheet({required this.item, required this.onAdd});
+
+  @override
+  State<_AddItemSheet> createState() => _AddItemSheetState();
+}
+
+class _AddItemSheetState extends State<_AddItemSheet> {
+  final _qtyController = TextEditingController();
+  late final _priceController = TextEditingController(
+    text: widget.item.buyPrice > 0 ? '${widget.item.buyPrice}' : '',
+  );
+
+  @override
+  void dispose() {
+    _qtyController.dispose();
+    _priceController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final qty = int.tryParse(_qtyController.text) ?? 0;
+    final price = int.tryParse(_priceController.text) ?? 0;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        0,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            widget.item.name,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Stok sekarang ${widget.item.stockDisplay}",
+            style: const TextStyle(fontSize: 14, color: AppColors.mutedForeground),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _qtyController,
+                  autofocus: true,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: "Jumlah",
+                    suffixText: "pcs",
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _priceController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: "Harga beli / pcs",
+                    prefixText: "Rp ",
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 52,
+            child: FilledButton(
+              onPressed: qty > 0 && price > 0
+                  ? () {
+                      widget.onAdd(qty, price);
+                      Navigator.pop(context);
+                    }
+                  : null,
+              child: Text(
+                qty > 0 && price > 0
+                    ? "Tambahkan · ${_rupiah.format(qty * price)}"
+                    : "Isi jumlah dan harga",
               ),
             ),
           ),

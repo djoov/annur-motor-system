@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../../core/theme.dart';
 class LowStockWidget extends StatelessWidget {
   final List<Map<String, dynamic>> items;
 
@@ -20,7 +21,7 @@ class LowStockWidget extends StatelessWidget {
         children: [
           const Row(
             children: [
-              Icon(LucideIcons.alertTriangle, color: Colors.red, size: 20),
+              Icon(LucideIcons.alertTriangle, color: AppColors.destructive, size: 20),
               SizedBox(width: 8),
               Text(
                 "Stok Menipis (< 5)",
@@ -38,11 +39,11 @@ class LowStockWidget extends StatelessWidget {
                   children: [
                     Icon(
                       LucideIcons.checkCircle,
-                      color: Colors.green,
+                      color: AppColors.successStrong,
                       size: 32,
                     ),
                     SizedBox(height: 8),
-                    Text("Stok Aman", style: TextStyle(color: Colors.grey)),
+                    Text("Stok Aman", style: TextStyle(color: AppColors.mutedForeground)),
                   ],
                 ),
               ),
@@ -60,12 +61,12 @@ class LowStockWidget extends StatelessWidget {
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.1),
+                            color: AppColors.destructive.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Icon(
                             LucideIcons.package,
-                            color: Colors.red,
+                            color: AppColors.destructive,
                             size: 16,
                           ),
                         ),
@@ -86,7 +87,7 @@ class LowStockWidget extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.red,
+                            color: AppColors.destructive,
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -94,7 +95,7 @@ class LowStockWidget extends StatelessWidget {
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
-                              fontSize: 11,
+                              fontSize: 12,
                             ),
                           ),
                         ),

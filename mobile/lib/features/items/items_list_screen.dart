@@ -5,7 +5,9 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme.dart';
-import '../../ui/input.dart';
+import '../../ui/bottom_nav_metrics.dart';
+import '../../ui/stock_badge.dart';
+import '../pos/models/pos_models.dart';
 import 'items_provider.dart';
 import 'item_form_screen.dart';
 import 'item_detail_screen.dart';
@@ -13,15 +15,17 @@ import 'bulk_import_screen.dart';
 import '../../core/services/export_service.dart';
 import '../auth/auth_provider.dart';
 
+enum _StockFilter { all, low, out }
+
 class ItemsListScreen extends StatefulWidget {
   final String? initialQuery;
   final bool showBackButton;
 
   const ItemsListScreen({
-    Key? key,
+    super.key,
     this.initialQuery,
     this.showBackButton = true,
-  }) : super(key: key);
+  });
 
   @override
   State<ItemsListScreen> createState() => _ItemsListScreenState();
@@ -30,17 +34,26 @@ class ItemsListScreen extends StatefulWidget {
 class _ItemsListScreenState extends State<ItemsListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
+  _StockFilter _filter = _StockFilter.all;
+
+  static final _rupiah = NumberFormat.currency(
+    locale: 'id_ID',
+    symbol: 'Rp ',
+    decimalDigits: 0,
+  );
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = context.read<ItemsProvider>();
+      if (provider.items.isEmpty) provider.fetchItems();
+    });
+
     _searchController.text = widget.initialQuery ?? "";
     _searchQuery = (widget.initialQuery ?? "").toLowerCase();
-
     _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text.toLowerCase();
-      });
+      setState(() => _searchQuery = _searchController.text.toLowerCase());
     });
   }
 
@@ -50,59 +63,55 @@ class _ItemsListScreenState extends State<ItemsListScreen> {
     super.dispose();
   }
 
-  Future<void> _handleExport(
-    BuildContext context,
-    ItemsProvider provider,
-  ) async {
-    try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Menyiapkan data eksport...")),
-      );
+  void _openForm() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ItemFormScreen()),
+    );
+  }
 
+  Future<void> _handleExport(ItemsProvider provider) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
       final items = provider.items;
       if (items.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Tidak ada data barang untuk diexport")),
+        messenger.showSnackBar(
+          const SnackBar(content: Text("Belum ada barang untuk diekspor")),
         );
         return;
       }
+      messenger.showSnackBar(
+        const SnackBar(content: Text("Menyiapkan file CSV...")),
+      );
 
       final csvData = items.map((item) {
-        // Prefix code with = to force Excel to treat as text (preserves leading zeros)
-        final formattedCode = '="${item.code}"';
         return [
-          formattedCode,
+          '="${item.code}"',
           item.name,
           item.buyPrice,
           item.sellPrice,
-          item.priceWorkshop,
-          item.stockDisplay, // was stock, better use stockDisplay for clarity or stock getter
-          item.stockWarehouse, // Fixed from qtyWarehouse
+          item.stockDisplay,
           item.tags.join(','),
-          item.category,
+          item.category ?? 'Umum',
           item.locationDisplay ?? '',
-          item.locationWarehouse ?? '',
-          item.description ?? '', // Added Description
+          item.description ?? '',
         ];
       }).toList();
 
-      final headers = [
+      const headers = [
         "KODE",
         "NAMA BARANG",
         "HARGA BELI",
-        "HARGA JUAL (UMUM)",
-        "HARGA JUAL (BENGKEL)",
-        "STOK TOKO",
-        "STOK GUDANG",
+        "HARGA JUAL",
+        "STOK",
         "TAGS",
         "KATEGORI",
-        "LOKASI TOKO",
-        "LOKASI GUDANG",
-        "DESKRIPSI", // Added Header
+        "LOKASI",
+        "DESKRIPSI",
       ];
 
       final fileName =
-          "Data_Barang_MekanikHub_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv";
+          "Data_Barang_Annur_App_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv";
 
       await ExportService.exportToCSV(
         headers: headers,
@@ -110,228 +119,238 @@ class _ItemsListScreenState extends State<ItemsListScreen> {
         fileName: fileName,
       );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Berhasil export data barang."),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      messenger.showSnackBar(
+        SnackBar(content: Text("${items.length} barang berhasil diekspor")),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Gagal export: $e"),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Gagal ekspor: $e"),
+          backgroundColor: AppColors.destructiveStrong,
+        ),
+      );
     }
+  }
+
+  List<Item> _visibleItems(List<Item> items) {
+    final list = items.where((item) {
+      final q = _searchQuery;
+      final matchesSearch = q.isEmpty ||
+          item.name.toLowerCase().contains(q) ||
+          item.code.toLowerCase().contains(q) ||
+          item.tags.any((tag) => tag.toLowerCase().contains(q));
+      final matchesStock = switch (_filter) {
+        _StockFilter.all => true,
+        _StockFilter.low =>
+          item.stockDisplay > 0 && item.stockDisplay <= kLowStockThreshold,
+        _StockFilter.out => item.stockDisplay <= 0,
+      };
+      return matchesSearch && matchesStock;
+    }).toList()
+      ..sort((a, b) {
+        final byCategory = (a.category ?? '').compareTo(b.category ?? '');
+        return byCategory != 0 ? byCategory : a.name.compareTo(b.name);
+      });
+    return list;
   }
 
   @override
   Widget build(BuildContext context) {
-    // Note: Items are fetched in initState/PostFrameCallback or handled by provider.
-    final provider = Provider.of<ItemsProvider>(context, listen: false);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (provider.items.isEmpty) provider.fetchItems();
-    });
+    final isTab = !widget.showBackButton;
+    final isAdmin = context.watch<AuthProvider>().isAdmin;
 
-    final currencyFormat = NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp ',
-      decimalDigits: 0,
+    final fab = Padding(
+      // Keep the button above HomeScreen's floating nav when shown as a tab.
+      padding: EdgeInsets.only(
+        bottom: isTab && !DesktopScaffold.isDesktop
+            ? BottomNavMetrics.height + 8
+            : 0,
+      ),
+      child: FloatingActionButton.extended(
+        onPressed: _openForm,
+        icon: const Icon(LucideIcons.plus),
+        label: const Text("Tambah Barang"),
+      ),
     );
 
-    final fab = FloatingActionButton(
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const ItemFormScreen()),
-        );
-      },
-      backgroundColor: AppColors.primary,
-      child: const Icon(LucideIcons.plus, color: Colors.white),
-    );
+    final body = _buildListBody(context, isAdmin);
 
-    // Desktop Layout
     if (DesktopScaffold.isDesktop) {
       return DesktopScaffold(
         activeRoute: '/items',
-        floatingActionButton: fab, // Pass FAB to desktop scaffold
-        body: _buildListBody(context, provider, currencyFormat, true),
+        floatingActionButton: fab,
+        body: body,
       );
     }
 
-    // Mobile Layout
-    return Scaffold(
-      drawer: null,
-      floatingActionButton: fab,
-      backgroundColor: AppColors.background,
-      body: _buildListBody(context, provider, currencyFormat, false),
-    );
+    return Scaffold(floatingActionButton: fab, body: body);
   }
 
-  Widget _buildListBody(
-    BuildContext context,
-    ItemsProvider provider,
-    NumberFormat currencyFormat,
-    bool isDesktop,
-  ) {
+  Widget _buildListBody(BuildContext context, bool isAdmin) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Force Desktop (Grid) if DesktopScaffold says so or width > 900
-        // But here we rely on the passed isDesktop param mostly,
-        // though the constraints are valid too.
-        final forceGrid = isDesktop || constraints.maxWidth > 900;
+        final useGrid = DesktopScaffold.isDesktop || constraints.maxWidth > 900;
+        final bottomSpace = widget.showBackButton
+            ? 96.0
+            : BottomNavMetrics.top(context) + 88;
 
         return Consumer<ItemsProvider>(
-          builder: (context, provider, child) {
-            final filteredItems =
-                provider.items.where((item) {
-                    final matchesTag = item.tags.any(
-                      (tag) => tag.toLowerCase().contains(_searchQuery),
-                    );
-                    return item.name.toLowerCase().contains(_searchQuery) ||
-                        item.code.toLowerCase().contains(_searchQuery) ||
-                        matchesTag;
-                  }).toList()
-                  // Sort by category first, then by name within category
-                  ..sort((a, b) {
-                    final categoryCompare = (a.category ?? '').compareTo(
-                      b.category ?? '',
-                    );
-                    if (categoryCompare != 0) return categoryCompare;
-                    return a.name.compareTo(b.name);
-                  });
+          builder: (context, provider, _) {
+            final items = _visibleItems(provider.items);
+            final lowCount = provider.items
+                .where((i) =>
+                    i.stockDisplay > 0 && i.stockDisplay <= kLowStockThreshold)
+                .length;
+            final outCount =
+                provider.items.where((i) => i.stockDisplay <= 0).length;
 
             return CustomScrollView(
               slivers: [
                 SliverAppBar(
-                  floating: true,
                   pinned: true,
-                  snap: false,
-                  title: const Text("Manajemen Barang"),
+                  automaticallyImplyLeading: widget.showBackButton,
+                  title: const Text("Produk"),
                   actions: [
-                    IconButton(
-                      icon: const Icon(LucideIcons.refreshCw),
-                      tooltip: "Refresh Data",
-                      onPressed: () {
-                        provider.fetchItems();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Memperbarui data barang...'),
-                          ),
-                        );
-                      },
-                    ),
-                    if (Provider.of<AuthProvider>(context).isAdmin) ...[
-                      IconButton(
-                        icon: const Icon(LucideIcons.download),
-                        tooltip: "Export Data (Excel)",
-                        onPressed: () => _handleExport(context, provider),
-                      ),
-                      IconButton(
-                        icon: const Icon(LucideIcons.fileInput),
-                        tooltip: "Import CSV",
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const BulkImportScreen(),
-                            ),
-                          );
+                    if (isAdmin)
+                      PopupMenuButton<String>(
+                        tooltip: "Lainnya",
+                        icon: const Icon(LucideIcons.ellipsisVertical),
+                        onSelected: (v) {
+                          if (v == 'export') _handleExport(provider);
+                          if (v == 'import') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BulkImportScreen(),
+                              ),
+                            );
+                          }
                         },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                            value: 'import',
+                            child: ListTile(
+                              leading: Icon(LucideIcons.fileInput),
+                              title: Text("Import dari CSV"),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'export',
+                            child: ListTile(
+                              leading: Icon(LucideIcons.download),
+                              title: Text("Ekspor ke CSV"),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
                   ],
                   bottom: PreferredSize(
-                    preferredSize: const Size.fromHeight(80),
+                    preferredSize: const Size.fromHeight(124),
                     child: Container(
-                      color: AppColors.surface, // Match AppBar bg
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: CustomInput(
-                        placeholder: "Cari Nama / Kode Barang...",
-                        controller: _searchController,
-                        suffixIcon: const Icon(LucideIcons.search, size: 20),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Total Items Count
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      "${filteredItems.length} barang${_searchQuery.isNotEmpty ? ' ditemukan' : ''}",
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ),
-                ),
-
-                if (provider.isLoading && provider.items.isEmpty)
-                  const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (filteredItems.isEmpty)
-                  const SliverFillRemaining(
-                    child: Center(
+                      color: AppColors.surface,
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Icon(
-                            LucideIcons.packageOpen,
-                            size: 64,
-                            color: AppColors.mutedForeground,
+                          TextField(
+                            controller: _searchController,
+                            textInputAction: TextInputAction.search,
+                            decoration: InputDecoration(
+                              hintText: "Cari nama, kode, atau tag",
+                              prefixIcon:
+                                  const Icon(LucideIcons.search, size: 20),
+                              suffixIcon: _searchQuery.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: "Hapus pencarian",
+                                      icon: const Icon(LucideIcons.x, size: 18),
+                                      onPressed: _searchController.clear,
+                                    ),
+                            ),
                           ),
-                          SizedBox(height: 16),
-                          Text(
-                            "Tidak ada barang ditemukan",
-                            style: TextStyle(color: AppColors.mutedForeground),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            height: 40,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              children: [
+                                _filterChip(
+                                    "Semua (${provider.items.length})",
+                                    _StockFilter.all),
+                                const SizedBox(width: 8),
+                                _filterChip(
+                                    "Menipis ($lowCount)", _StockFilter.low),
+                                const SizedBox(width: 8),
+                                _filterChip("Habis ($outCount)", _StockFilter.out),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ),
+                  ),
+                ),
+                if (provider.isLoading && provider.items.isEmpty)
+                  const SliverFillRemaining(
+                    child: Center(child: CircularProgressIndicator.adaptive()),
                   )
-                else if (forceGrid) // Use forceGrid here
+                else if (items.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _EmptyItems(
+                      hasItems: provider.items.isNotEmpty,
+                      onAdd: _openForm,
+                      onReset: () {
+                        _searchController.clear();
+                        setState(() => _filter = _StockFilter.all);
+                      },
+                    ),
+                  )
+                else if (useGrid)
                   SliverPadding(
                     padding: const EdgeInsets.all(16),
                     sliver: SliverGrid(
                       gridDelegate:
                           const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 400,
-                            mainAxisSpacing: 16,
-                            crossAxisSpacing: 16,
-                            mainAxisExtent:
-                                130, // Use fixed height instead of aspect ratio
-                          ),
-                      delegate: SliverChildBuilderDelegate((context, index) {
-                        final item = filteredItems[index];
-                        return _buildItemCard(context, item, currencyFormat);
-                      }, childCount: filteredItems.length),
+                        maxCrossAxisExtent: 420,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        mainAxisExtent: 88,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _ItemRow(
+                          item: items[index],
+                          price: _rupiah.format(items[index].sellPrice),
+                          bordered: true,
+                        ),
+                        childCount: items.length,
+                      ),
                     ),
                   )
                 else
                   SliverPadding(
-                    padding: const EdgeInsets.all(16),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate((context, index) {
-                        final item = filteredItems[index];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: _buildItemCard(context, item, currencyFormat),
-                        );
-                      }, childCount: filteredItems.length),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    // Lazily built rows inside one bordered white panel.
+                    sliver: DecoratedSliver(
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      sliver: SliverList.separated(
+                        itemCount: items.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(indent: 84, endIndent: 16),
+                        itemBuilder: (context, index) => _ItemRow(
+                          item: items[index],
+                          price: _rupiah.format(items[index].sellPrice),
+                        ),
+                      ),
                     ),
                   ),
+                SliverToBoxAdapter(child: SizedBox(height: bottomSpace)),
               ],
             );
           },
@@ -340,163 +359,185 @@ class _ItemsListScreenState extends State<ItemsListScreen> {
     );
   }
 
-  Widget _buildItemCard(
-    BuildContext context,
-    dynamic item,
-    NumberFormat currencyFormat,
-  ) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+  Widget _filterChip(String label, _StockFilter value) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: _filter == value,
+      showCheckmark: false,
+      onSelected: (_) => setState(() => _filter = value),
+    );
+  }
+}
+
+class _ItemRow extends StatelessWidget {
+  final Item item;
+  final String price;
+  final bool bordered;
+
+  const _ItemRow({
+    required this.item,
+    required this.price,
+    this.bordered = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = item.imageUrl != null && item.imageUrl!.isNotEmpty;
+    final meta = [
+      if (item.code.isNotEmpty) item.code,
+      if (item.category != null && item.category!.isNotEmpty) item.category!,
+    ].join(" · ");
+
+    final row = InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ItemDetailScreen(item: item)),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ItemDetailScreen(item: item),
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Product Image Thumbnail
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 52,
+                height: 52,
+                child: hasImage
                     ? Image.network(
                         item.imageUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Center(
-                            child: Icon(
-                              LucideIcons.imageOff,
-                              size: 16,
-                              color: AppColors.mutedForeground,
-                            ),
-                          );
-                        },
+                        errorBuilder: (_, __, ___) => const _Thumb(),
                       )
-                    : const Center(
-                        child: Icon(
-                          LucideIcons.package,
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
+                    : const _Thumb(),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (meta.isNotEmpty) ...[
+                    const SizedBox(height: 2),
                     Text(
-                      item.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: AppColors.primary,
-                      ),
+                      meta,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.code,
                       style: const TextStyle(
-                        color: AppColors.mutedForeground,
                         fontSize: 13,
+                        color: AppColors.mutedForeground,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (item.category != null && item.category!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          item.category!,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 8),
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        _buildBadge(
-                          label: "Stok: ${item.stock}",
-                          color: item.stock <= 5 ? Colors.red : Colors.green,
-                        ),
-                        Text(
-                          currencyFormat.format(item.sellPrice),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
                     ),
                   ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  price,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
                 ),
-              ),
-              const Icon(
-                LucideIcons.chevronRight,
-                color: AppColors.mutedForeground,
-              ),
-            ],
-          ),
+                const SizedBox(height: 4),
+                StockBadge(item.stockDisplay),
+              ],
+            ),
+          ],
         ),
       ),
     );
-  }
 
-  Widget _buildBadge({required String label, required Color color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withOpacity(0.2)),
+    if (!bordered) return row;
+    return Material(
+      color: AppColors.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
+      child: row,
+    );
+  }
+}
+
+class _Thumb extends StatelessWidget {
+  const _Thumb();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.muted,
+      alignment: Alignment.center,
+      child: const Icon(LucideIcons.package,
+          size: 22, color: AppColors.mutedForeground),
+    );
+  }
+}
+
+class _EmptyItems extends StatelessWidget {
+  final bool hasItems;
+  final VoidCallback onAdd;
+  final VoidCallback onReset;
+
+  const _EmptyItems({
+    required this.hasItems,
+    required this.onAdd,
+    required this.onReset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(LucideIcons.packageOpen,
+                size: 48, color: AppColors.mutedForeground),
+            const SizedBox(height: 12),
+            Text(
+              hasItems ? "Barang tidak ditemukan" : "Belum ada barang",
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              hasItems
+                  ? "Coba kata lain atau ubah filter stok."
+                  : "Tambahkan barang pertama untuk mulai berjualan.",
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: 16),
+            hasItems
+                ? OutlinedButton(
+                    onPressed: onReset,
+                    child: const Text("Tampilkan semua"),
+                  )
+                : FilledButton.icon(
+                    onPressed: onAdd,
+                    icon: const Icon(LucideIcons.plus, size: 18),
+                    label: const Text("Tambah Barang"),
+                  ),
+          ],
         ),
       ),
     );

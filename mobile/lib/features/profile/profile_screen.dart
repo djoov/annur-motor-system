@@ -1,260 +1,208 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme.dart';
-import '../settings/settings_provider.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../core/theme.dart';
+import '../auth/auth_provider.dart';
+
+/// The signed-in user's own profile. Shop data lives in Setelan → Toko & Struk.
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+  const ProfileScreen({super.key});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _formKey = GlobalKey<FormState>();
-
-  // Controllers
-  late TextEditingController _adminNameController;
-  late TextEditingController _shopNameController;
-  late TextEditingController _shopAddressController;
-  late TextEditingController _shopPhoneController;
-  late TextEditingController _receiptFooterController;
+  late final TextEditingController _nameController;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    final settings = Provider.of<SettingsProvider>(context, listen: false);
-    _adminNameController = TextEditingController(text: settings.adminName);
-    _shopNameController = TextEditingController(text: settings.shopName);
-    _shopAddressController = TextEditingController(text: settings.shopAddress);
-    _shopPhoneController = TextEditingController(text: settings.shopPhone);
-    _receiptFooterController = TextEditingController(
-      text: settings.receiptFooter,
+    _nameController = TextEditingController(
+      text: context.read<AuthProvider>().userModel?.name ?? '',
     );
+    _nameController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    _adminNameController.dispose();
-    _shopNameController.dispose();
-    _shopAddressController.dispose();
-    _shopPhoneController.dispose();
-    _receiptFooterController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
-  Future<void> _saveProfile() async {
-    if (_formKey.currentState!.validate()) {
-      final settings = Provider.of<SettingsProvider>(context, listen: false);
-      await settings.saveSettings(
-        _shopNameController.text,
-        _shopAddressController.text,
-        _shopPhoneController.text,
-        _receiptFooterController.text,
-        _adminNameController.text,
+  Future<void> _saveName() async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _isSaving = true);
+    try {
+      await context.read<AuthProvider>().updateName(_nameController.text);
+      messenger.showSnackBar(const SnackBar(content: Text("Nama disimpan")));
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Gagal menyimpan nama: $e"),
+          backgroundColor: AppColors.destructiveStrong,
+        ),
       );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Profil berhasil disimpan!"),
-            backgroundColor: AppColors.success,
-          ),
-        );
-        Navigator.pop(context);
-      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  Future<void> _sendPasswordReset(String email) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<AuthProvider>().resetPassword(email);
+      messenger.showSnackBar(
+        SnackBar(content: Text("Link ganti password dikirim ke $email")),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Gagal mengirim email: $e"),
+          backgroundColor: AppColors.destructiveStrong,
+        ),
+      );
+    }
+  }
+
+  Future<void> _logout() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Keluar dari akun?"),
+        content: const Text("Anda perlu login lagi untuk memakai aplikasi."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Batal"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.destructive),
+            child: const Text("Keluar"),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final navigator = Navigator.of(context);
+    await context.read<AuthProvider>().logout();
+    navigator.popUntil((route) => route.isFirst);
   }
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final user = auth.userModel;
+    final name = user?.name ?? '';
+    final email = user?.email ?? auth.user?.email ?? '';
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    final roleLabel = switch (user?.role) {
+      'admin' => "Admin (pemilik)",
+      'staff' => "Staff",
+      _ => "Belum disetujui",
+    };
+    final nameChanged =
+        _nameController.text.trim().isNotEmpty && _nameController.text.trim() != name;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text(
-          "Profil & Toko",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: AppColors.primary,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Header with Avatar
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.only(bottom: 32, top: 20),
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(32),
+      appBar: AppBar(title: const Text("Profil Saya")),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+            children: [
+              Center(
+                child: CircleAvatar(
+                  radius: 40,
+                  backgroundColor: AppColors.brandNavy,
+                  child: Text(
+                    initial,
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.brandYellow,
+                    ),
+                  ),
                 ),
               ),
-              child: Column(
-                children: [
-                  Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 4),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      LucideIcons.user,
-                      size: 50,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    "Edit Profil",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 12),
+              Text(
+                name.isNotEmpty ? name : "Tanpa nama",
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
               ),
-            ),
-
-            // Form Content
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
+              const SizedBox(height: 4),
+              Text(
+                "$email · $roleLabel",
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: AppColors.mutedForeground),
+              ),
+              const SizedBox(height: 32),
+              TextField(
+                controller: _nameController,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: "Nama yang tampil di aplikasi",
+                  prefixIcon: Icon(LucideIcons.user, size: 20),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 52,
+                child: FilledButton(
+                  onPressed: nameChanged && !_isSaving ? _saveName : null,
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text("Simpan Nama"),
+                ),
+              ),
+              const SizedBox(height: 32),
+              Material(
+                color: AppColors.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: AppColors.border),
+                ),
+                clipBehavior: Clip.antiAlias,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildSectionHeader("Info Admin"),
-                    _buildTextField(
-                      label: "Nama Admin",
-                      controller: _adminNameController,
-                      icon: LucideIcons.user,
+                    ListTile(
+                      leading: const Icon(LucideIcons.lock),
+                      title: const Text("Ganti password"),
+                      subtitle: const Text("Link dikirim ke email Anda"),
+                      trailing: const Icon(LucideIcons.chevronRight, size: 18),
+                      onTap: email.isEmpty ? null : () => _sendPasswordReset(email),
                     ),
-
-                    const SizedBox(height: 24),
-                    _buildSectionHeader("Detail Toko"),
-                    _buildTextField(
-                      label: "Nama Toko",
-                      controller: _shopNameController,
-                      icon: LucideIcons.store,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextField(
-                      label: "Alamat Toko",
-                      controller: _shopAddressController,
-                      icon: LucideIcons.mapPin,
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextField(
-                      label: "Nomor Telepon",
-                      controller: _shopPhoneController,
-                      icon: LucideIcons.phone,
-                      keyboardType: TextInputType.phone,
-                    ),
-
-                    const SizedBox(height: 24),
-                    _buildSectionHeader("Pengaturan Struk"),
-                    _buildTextField(
-                      label: "Footer Struk",
-                      controller: _receiptFooterController,
-                      icon: LucideIcons.receipt,
-                      helperText: "Pesan di bagian bawah struk",
-                    ),
-
-                    const SizedBox(height: 40),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _saveProfile,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 2,
-                        ),
-                        child: const Text(
-                          "SIMPAN PERUBAHAN",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
+                    const Divider(indent: 16, endIndent: 16),
+                    ListTile(
+                      leading: const Icon(LucideIcons.logOut,
+                          color: AppColors.destructiveStrong),
+                      title: const Text(
+                        "Keluar",
+                        style: TextStyle(color: AppColors.destructiveStrong),
                       ),
+                      onTap: _logout,
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              const Text(
+                "Nama toko, alamat, dan logo struk diatur di Setelan → Toko & Struk.",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: AppColors.mutedForeground),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: AppColors.primary,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required String label,
-    required TextEditingController controller,
-    required IconData icon,
-    TextInputType? keyboardType,
-    int maxLines = 1,
-    String? helperText,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      validator: (value) =>
-          value == null || value.isEmpty ? 'Wajib diisi' : null,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: AppColors.mutedForeground),
-        helperText: helperText,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
-        ),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.all(16),
       ),
     );
   }

@@ -12,6 +12,10 @@ class ItemsProvider extends ChangeNotifier {
   bool _isLoading = false;
   StreamSubscription<QuerySnapshot>? _itemsSubscription;
 
+  ItemsProvider() {
+    startListening();
+  }
+
   List<Item> get items => _items;
   bool get isLoading => _isLoading;
 
@@ -40,13 +44,18 @@ class ItemsProvider extends ChangeNotifier {
     _itemsSubscription?.cancel(); // Cancel any existing subscription
     _itemsSubscription = _db
         .collection('items')
-        .orderBy('name')
         .snapshots()
         .listen(
           (snapshot) {
-            _items = snapshot.docs
-                .map((doc) => Item.fromFirestore(doc))
-                .toList();
+            _items = snapshot.docs.map((doc) {
+              try {
+                return Item.fromFirestore(doc);
+              } catch (e) {
+                print("Error parsing item ${doc.id}: $e");
+                return null;
+              }
+            }).whereType<Item>().toList();
+
             _isLoading = false;
             _checkLowStock();
             notifyListeners();
@@ -107,20 +116,16 @@ class ItemsProvider extends ChangeNotifier {
     int sellPrice,
     int buyPrice,
     int stockDisplay,
-    int stockWarehouse,
-    int priceWorkshop,
     List<String> tags,
     String category,
     String? imageUrl,
     String? locationDisplay,
-    String? locationWarehouse,
     String? description,
   ) async {
     try {
       _isLoading = true;
       notifyListeners();
 
-      // Check for duplicates
       final normalizedCode = code.trim().toUpperCase();
       final exists = _items.any((i) => i.code.toUpperCase() == normalizedCode);
       if (exists) {
@@ -134,20 +139,17 @@ class ItemsProvider extends ChangeNotifier {
         'code': normalizedCode,
         'sellPrice': sellPrice,
         'buyPrice': buyPrice,
+        'stock': stockDisplay,
         'qty_display': stockDisplay,
-        'stock': stockDisplay, // Legacy sync
-        'qty_warehouse': stockWarehouse,
-        'price_workshop': priceWorkshop,
         'tags': tags,
         'category': category,
         'imageUrl': imageUrl,
         'location_display': locationDisplay,
-        'location_warehouse': locationWarehouse,
         'description': description,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      await fetchItems(); // Refresh list
+      await fetchItems();
       return true;
     } catch (e) {
       print("Error adding item: $e");
@@ -165,24 +167,16 @@ class ItemsProvider extends ChangeNotifier {
     int sellPrice,
     int buyPrice,
     int stockDisplay,
-    int stockWarehouse,
-    int priceWorkshop,
     List<String> tags,
     String category,
     String? imageUrl,
     String? locationDisplay,
-    String? locationWarehouse,
     String? description,
   ) async {
     try {
       _isLoading = true;
       notifyListeners();
 
-      // Check for duplicates if code changed
-      // We need to check if ANY OTHER item has this code
-      // Since we don't have the full list in memory reliably updated (or we do?),
-      // Best to rely on _items if it's synced, or query DB.
-      // Since _items is loaded, we can use it.
       final normalizedCode = code.trim().toUpperCase();
       final existingParams = _items.firstWhere(
         (i) => i.id == id,
@@ -193,7 +187,6 @@ class ItemsProvider extends ChangeNotifier {
           sellPrice: 0,
           buyPrice: 0,
           stockDisplay: 0,
-          stockWarehouse: 0,
           tags: [],
           category: '',
         ),
@@ -215,20 +208,17 @@ class ItemsProvider extends ChangeNotifier {
         'code': normalizedCode,
         'sellPrice': sellPrice,
         'buyPrice': buyPrice,
+        'stock': stockDisplay,
         'qty_display': stockDisplay,
-        'stock': stockDisplay, // Legacy sync
-        'qty_warehouse': stockWarehouse,
-        'price_workshop': priceWorkshop,
         'tags': tags,
         'category': category,
-        'imageUrl': imageUrl ?? '', // Always update, empty string if deleted
+        'imageUrl': imageUrl ?? '',
         'location_display': locationDisplay,
-        'location_warehouse': locationWarehouse,
         'description': description,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      await fetchItems(); // Refresh list
+      await fetchItems();
       return true;
     } catch (e) {
       print("Error updating item: $e");
@@ -241,21 +231,13 @@ class ItemsProvider extends ChangeNotifier {
 
   Future<bool> updateStock(String id, int newStock) async {
     try {
-      // Optimistic update
-      final index = _items.indexWhere((i) => i.id == id);
-      if (index != -1) {
-        // We can't easily modify the immutable Item object in place without copying
-        // But for UI responsiveness, we rely on fetchItems or just wait for it.
-        // Let's just do the DB call.
-      }
-
       await _db.collection('items').doc(id).update({
-        'qty_display': newStock,
         'stock': newStock,
+        'qty_display': newStock,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      await fetchItems(); // Refresh to ensure consistency
+      await fetchItems();
       return true;
     } catch (e) {
       print("Error updating stock: $e");
@@ -264,29 +246,23 @@ class ItemsProvider extends ChangeNotifier {
   }
 
   /// Quick stock adjustment - updates stock by delta value
-  /// [location] can be 'display' or 'warehouse'
-  /// [delta] is the change amount (positive to add, negative to subtract)
   Future<bool> quickUpdateStock(String id, String location, int delta) async {
     try {
       final index = _items.indexWhere((i) => i.id == id);
       if (index == -1) return false;
 
       final item = _items[index];
-      int currentStock = location == 'display'
-          ? item.stockDisplay
-          : item.stockWarehouse;
+      int currentStock = item.stockDisplay;
       int newStock = currentStock + delta;
-      if (newStock < 0) newStock = 0; // Don't allow negative stock
-
-      final fieldName = location == 'display' ? 'qty_display' : 'qty_warehouse';
+      if (newStock < 0) newStock = 0;
 
       await _db.collection('items').doc(id).update({
-        fieldName: newStock,
-        if (location == 'display') 'stock': newStock, // Legacy field
+        'stock': newStock,
+        'qty_display': newStock,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      await fetchItems(); // Refresh to get updated data
+      await fetchItems();
       return true;
     } catch (e) {
       print("Error quick updating stock: $e");
@@ -324,44 +300,83 @@ class ItemsProvider extends ChangeNotifier {
         for (var item in _items) item.code.trim().toUpperCase(): item,
       };
 
-      final batch = _db.batch();
+      // 🌟 Auto-register any new categories found in CSV to the 'categories' collection
+      try {
+        final uniqueCategories = itemsData
+            .map((e) => e['category']?.toString().trim())
+            .where((c) => c != null && c.isNotEmpty && c != 'Umum')
+            .toSet();
+
+        if (uniqueCategories.isNotEmpty) {
+          final existingCatsSnap = await _db.collection('categories').get();
+          final existingCatNames = existingCatsSnap.docs
+              .map((d) => (d.data()['name'] ?? '').toString().trim().toLowerCase())
+              .toSet();
+
+          final catBatch = _db.batch();
+          bool hasNewCats = false;
+
+          for (var cat in uniqueCategories) {
+            if (cat != null && !existingCatNames.contains(cat.toLowerCase())) {
+              final newCatRef = _db.collection('categories').doc();
+              catBatch.set(newCatRef, {
+                'name': cat,
+                'createdAt': FieldValue.serverTimestamp(),
+              });
+              existingCatNames.add(cat.toLowerCase());
+              hasNewCats = true;
+            }
+          }
+
+          if (hasNewCats) {
+            await catBatch.commit();
+          }
+        }
+      } catch (catError) {
+        print("Warning: Auto-registering categories skipped: $catError");
+      }
+
+      int parseInt(dynamic val) {
+        if (val == null) return 0;
+        if (val is int) return val;
+        if (val is num) return val.toInt();
+        if (val is String) {
+          final clean = val.replaceAll(RegExp(r'[^0-9\-]'), '');
+          return int.tryParse(clean) ??
+              double.tryParse(clean)?.toInt() ??
+              0;
+        }
+        return 0;
+      }
+
+      List<void Function(WriteBatch batch)> batchOperations = [];
 
       for (var data in itemsData) {
-        final code = data['code'].toString().trim().toUpperCase();
-        final name = data['name'].toString().trim();
-        final sellPrice = int.tryParse(data['sellPrice'].toString()) ?? 0;
-        final buyPrice = int.tryParse(data['buyPrice'].toString()) ?? 0;
-        final priceWorkshop =
-            int.tryParse(data['price_workshop'].toString()) ?? 0;
-        final qtyDisplay = int.tryParse(data['qty_display'].toString()) ?? 0;
-        final qtyWarehouse =
-            int.tryParse(data['qty_warehouse'].toString()) ?? 0;
+        final code = data['code']?.toString().trim().toUpperCase() ?? '';
+        final name = data['name']?.toString().trim() ?? '';
+        final sellPrice = parseInt(data['sellPrice']);
+        final buyPrice = parseInt(data['buyPrice']);
+        final stock = parseInt(data['stock'] ?? data['qty_display'] ?? data['qty_warehouse']);
         final tags =
             (data['tags'] as List<dynamic>?)
-                ?.map((e) => e.toString())
+                ?.map((e) => e.toString().trim())
+                .where((e) => e.isNotEmpty)
                 .toList() ??
             [];
-        final category = data['category'].toString().trim();
-
-        final locationDisplay = data['location_display']?.toString().trim();
-        final locationWarehouse = data['location_warehouse']?.toString().trim();
+        final category = data['category']?.toString().trim() ?? 'Umum';
+        final locationDisplay = (data['location_display'] ?? data['location'])?.toString().trim();
         final description = data['description']?.toString().trim();
 
         if (code.isEmpty || name.isEmpty) continue;
 
         if (existingItemsMap.containsKey(code)) {
-          // UPDATE Existing
           final existingItem = existingItemsMap[code]!;
           final docRef = _db.collection('items').doc(existingItem.id);
 
           Map<String, dynamic> updates = {
             'name': name,
-            // Always update prices/details if valid data is present (Assume CSV is latest)
             'sellPrice': sellPrice > 0 ? sellPrice : existingItem.sellPrice,
             'buyPrice': buyPrice > 0 ? buyPrice : existingItem.buyPrice,
-            'price_workshop': priceWorkshop > 0
-                ? priceWorkshop
-                : existingItem.priceWorkshop,
             'category': category.isNotEmpty ? category : existingItem.category,
             'updatedAt': FieldValue.serverTimestamp(),
           };
@@ -369,66 +384,60 @@ class ItemsProvider extends ChangeNotifier {
           if (locationDisplay != null && locationDisplay.isNotEmpty) {
             updates['location_display'] = locationDisplay;
           }
-
-          if (locationWarehouse != null && locationWarehouse.isNotEmpty) {
-            updates['location_warehouse'] = locationWarehouse;
-          }
-
           if (description != null && description.isNotEmpty) {
             updates['description'] = description;
           }
-
           if (tags.isNotEmpty) {
             updates['tags'] = tags;
           }
 
-          // STOCK LOGIC: The Core Difference
           if (isRestockMode) {
-            // RESTOCK: Increment existing stock
-            if (qtyDisplay > 0) {
-              updates['qty_display'] = FieldValue.increment(qtyDisplay);
-              updates['stock'] = FieldValue.increment(qtyDisplay); // Legacy
-            }
-            if (qtyWarehouse > 0) {
-              updates['qty_warehouse'] = FieldValue.increment(qtyWarehouse);
+            if (stock > 0) {
+              updates['stock'] = FieldValue.increment(stock);
+              updates['qty_display'] = FieldValue.increment(stock);
             }
           } else {
-            // OVERWRITE: Replace with CSV value
-            // We only overwrite if the CSV value is >= 0.
-            // If CSV value is 0, it means 0 stock.
-            // Users should be careful. To keep existing, they should omit column or use current value.
-            // Assumption: If they export then import, the value IS the current value or edited value.
-            updates['qty_display'] = qtyDisplay;
-            updates['stock'] = qtyDisplay; // Legacy
-            updates['qty_warehouse'] = qtyWarehouse;
+            updates['stock'] = stock;
+            updates['qty_display'] = stock;
           }
 
-          batch.update(docRef, updates);
+          batchOperations.add((batch) => batch.update(docRef, updates));
           updated++;
         } else {
-          // CREATE New (Always Use Values as is)
           final docRef = _db.collection('items').doc();
-          batch.set(docRef, {
+          final newItemData = {
             'name': name,
             'code': code,
             'sellPrice': sellPrice,
             'buyPrice': buyPrice,
-            'price_workshop': priceWorkshop,
-            'qty_display': qtyDisplay,
-            'qty_warehouse': qtyWarehouse,
-            'stock': qtyDisplay,
+            'stock': stock,
+            'qty_display': stock,
             'tags': tags,
             'category': category.isNotEmpty ? category : 'Umum',
-            'location_display': locationDisplay,
-            'location_warehouse': locationWarehouse,
-            'description': description,
+            'location_display': locationDisplay ?? '',
+            'description': description ?? '',
             'createdAt': FieldValue.serverTimestamp(),
-          });
+          };
+
+          batchOperations.add((batch) => batch.set(docRef, newItemData));
           created++;
         }
       }
 
-      await batch.commit();
+      // Commit in chunks of 400 operations (Firestore batch limit is 500)
+      const chunkSize = 400;
+      for (var i = 0; i < batchOperations.length; i += chunkSize) {
+        final end = (i + chunkSize < batchOperations.length)
+            ? i + chunkSize
+            : batchOperations.length;
+        final chunk = batchOperations.sublist(i, end);
+        final batch = _db.batch();
+        for (var op in chunk) {
+          op(batch);
+        }
+        await batch.commit();
+      }
+
       await fetchItems(); // Refresh UI
       return {'created': created, 'updated': updated};
     } catch (e) {

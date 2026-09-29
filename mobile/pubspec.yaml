@@ -100,6 +100,11 @@ flutter:
     - assets/logo-app.png
     - assets/logo_app_new.png
     - assets/app_icon.png
+    - assets/images/3d_icons/kasir.png
+    - assets/images/3d_icons/kategori.png
+    - assets/images/3d_icons/pelanggan.png
+    - assets/images/3d_icons/laporan.png
+    - shorebird.yaml
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see

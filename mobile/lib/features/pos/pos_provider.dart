@@ -36,6 +36,10 @@ class PosProvider extends ChangeNotifier {
     }
   }
 
+  PosProvider() {
+    startListening();
+  }
+
   // Setters
   void setDebt(bool value) {
     _isDebt = value;
@@ -63,9 +67,15 @@ class PosProvider extends ChangeNotifier {
         .snapshots()
         .listen(
           (snapshot) {
-            _allItems = snapshot.docs
-                .map((doc) => Item.fromFirestore(doc))
-                .toList();
+            _allItems = snapshot.docs.map((doc) {
+              try {
+                return Item.fromFirestore(doc);
+              } catch (e) {
+                print("Error parsing POS item ${doc.id}: $e");
+                return null;
+              }
+            }).whereType<Item>().toList();
+
             _applyFilters();
 
             // Extract unique categories
@@ -87,9 +97,14 @@ class PosProvider extends ChangeNotifier {
     _customersSubscription = _db.collection('customers').snapshots().listen((
       snapshot,
     ) {
-      _customers = snapshot.docs
-          .map((doc) => Customer.fromFirestore(doc))
-          .toList();
+      _customers = snapshot.docs.map((doc) {
+        try {
+          return Customer.fromFirestore(doc);
+        } catch (e) {
+          print("Error parsing customer ${doc.id}: $e");
+          return null;
+        }
+      }).whereType<Customer>().toList();
       notifyListeners();
     }, onError: (e) => print("Error listening to customers: $e"));
   }
@@ -128,54 +143,44 @@ class PosProvider extends ChangeNotifier {
 
   String _searchQuery = "";
 
-  bool _isWorkshopMode = false;
+  // ==========================================
+  // 🧠 CONVENTIONAL AI / HEURISTIC ENGINE
+  // ==========================================
 
-  bool get isWorkshopMode => _isWorkshopMode;
+  static const Map<String, List<String>> _synonymDict = {
+    'kanpas': ['kampas', 'rem', 'pad', 'brake', 'tromol', 'cakram'],
+    'kampas': ['kanpas', 'rem', 'pad', 'brake', 'tromol', 'cakram'],
+    'rem': ['kampas', 'kanpas', 'brake', 'tromol', 'cakram', 'disc'],
+    'vanbel': ['vanbelt', 'vbelt', 'v-belt', 'belt', 'tali'],
+    'vanbelt': ['vanbel', 'vbelt', 'v-belt', 'belt', 'tali'],
+    'vbelt': ['vanbelt', 'vanbel', 'v-belt', 'belt', 'tali'],
+    'klahar': ['laher', 'bearing', 'lahar'],
+    'laher': ['klahar', 'bearing', 'lahar'],
+    'bearing': ['klahar', 'laher', 'lahar'],
+    'sok': ['skok', 'shock', 'breaker', 'suspensi'],
+    'skok': ['sok', 'shock', 'breaker', 'suspensi'],
+    'shock': ['sok', 'skok', 'breaker', 'suspensi'],
+    'lampu': ['bohlam', 'led', 'bulb', 'headlamp', 'stoplamp', 'sein'],
+    'bohlam': ['lampu', 'led', 'bulb'],
+    'gir': ['gear', 'sprocket', 'rantai'],
+    'gear': ['gir', 'sprocket', 'rantai'],
+    'karbu': ['karburator', 'carburetor'],
+    'karburator': ['karbu', 'carburetor'],
+    'injeksi': ['injector', 'injektor', 'fi'],
+    'sil': ['seal', 'karet'],
+    'seal': ['sil', 'karet'],
+    'paking': ['gasket', 'seal', 'packing'],
+    'gasket': ['paking', 'seal', 'packing'],
+    'aki': ['accu', 'baterai', 'battery'],
+    'accu': ['aki', 'baterai', 'battery'],
+    'busi': ['spark', 'plug', 'ngk', 'denso'],
+    'oli': ['oil', 'pelumas', 'lubricant'],
+    'oil': ['oli', 'pelumas', 'lubricant'],
+    'ban': ['tire', 'tubeless', 'tubetype', 'luar', 'dalam'],
+    'kabel': ['cable', 'tali', 'kawat'],
+  };
 
-  void setWorkshopMode(bool value) {
-    _isWorkshopMode = value;
-    // Update prices of existing cart items?
-    // SRS implies mode is a toggle. If toggled, all current cart items should probably update?
-    // Or is it per transaction?
-    // Let's assume it updates the current view and subsequent adds.
-    // For simplicity, let's clear cart or ask to clear, OR just update cart items.
-    // Let's update all cart items prices.
-    for (var item in _cart) {
-      if (item.category != 'Jasa') {
-        // Don't change service items if any
-        // This is tricky because CartItem extends Item and sellPrice is final.
-        // We might need to replace items in cart.
-      }
-    }
-    // For MVP: Clearing cart might be safer, but annoying.
-    // Better: Re-map the cart with new prices.
-
-    final newCart = _cart.map((ci) {
-      final newItem = Item(
-        id: ci.id,
-        name: ci.name,
-        code: ci.code,
-        sellPrice: value && ci.priceWorkshop > 0
-            ? ci.priceWorkshop
-            : _allItems.firstWhere((i) => i.id == ci.id).sellPrice,
-        buyPrice: ci.buyPrice,
-        stockDisplay: ci.stockDisplay,
-        stockWarehouse: ci.stockWarehouse,
-        priceWorkshop: ci.priceWorkshop,
-        tags: ci.tags,
-        category: ci.category,
-        imageUrl: ci.imageUrl,
-      );
-      return CartItem(item: newItem, quantity: ci.quantity);
-    }).toList();
-
-    _cart.clear();
-    _cart.addAll(newCart);
-
-    notifyListeners();
-  }
-
-  // ... [search logic update]
+  /// Multi-token fuzzy search with synonym expansion and relevance scoring
   void _applyFilters() {
     List<Item> temp = _allItems;
 
@@ -183,20 +188,169 @@ class PosProvider extends ChangeNotifier {
       temp = temp.where((item) => item.category == _selectedCategory).toList();
     }
 
-    if (_searchQuery.isNotEmpty) {
-      final lower = _searchQuery.toLowerCase();
-      temp = temp.where((item) {
-        final matchesName = item.name.toLowerCase().contains(lower);
-        final matchesCode = item.code.toLowerCase().contains(lower);
-        final matchesTags = item.tags.any(
-          (tag) => tag.toLowerCase().contains(lower),
-        );
-        return matchesName || matchesCode || matchesTags;
-      }).toList();
+    if (_searchQuery.trim().isNotEmpty) {
+      final rawTokens = _searchQuery
+          .toLowerCase()
+          .split(RegExp(r'\s+'))
+          .where((t) => t.isNotEmpty)
+          .toList();
+
+      // Expand synonyms for each search token
+      final Set<String> queryTokens = {};
+      for (var token in rawTokens) {
+        queryTokens.add(token);
+        if (_synonymDict.containsKey(token)) {
+          queryTokens.addAll(_synonymDict[token]!);
+        }
+      }
+
+      final scoredItems = <MapEntry<Item, int>>[];
+
+      for (var item in temp) {
+        final itemName = item.name.toLowerCase();
+        final itemCode = item.code.toLowerCase();
+        final itemCategory = (item.category ?? '').toLowerCase();
+        final itemTags = item.tags.map((t) => t.toLowerCase()).toList();
+
+        int score = 0;
+
+        // Exact code match = highest priority
+        if (itemCode == _searchQuery.trim().toLowerCase()) {
+          score += 1000;
+        } else if (itemCode.contains(_searchQuery.trim().toLowerCase())) {
+          score += 500;
+        }
+
+        // Exact full phrase match in name
+        if (itemName.contains(_searchQuery.trim().toLowerCase())) {
+          score += 300;
+        }
+
+        // Token match evaluation
+        int matchedTokens = 0;
+        for (var token in queryTokens) {
+          bool tokenMatched = false;
+
+          if (itemName.contains(token)) {
+            score += 50;
+            tokenMatched = true;
+          }
+          if (itemTags.any((t) => t.contains(token))) {
+            score += 40;
+            tokenMatched = true;
+          }
+          if (itemCategory.contains(token)) {
+            score += 20;
+            tokenMatched = true;
+          }
+
+          if (tokenMatched) matchedTokens++;
+        }
+
+        // If at least one primary token matched
+        if (score > 0 || matchedTokens > 0) {
+          scoredItems.add(MapEntry(item, score + (matchedTokens * 30)));
+        }
+      }
+
+      // Sort by relevance score descending
+      scoredItems.sort((a, b) => b.value.compareTo(a.value));
+      temp = scoredItems.map((e) => e.key).toList();
     }
 
     _filteredItems = temp;
     notifyListeners();
+  }
+
+  /// 🎯 AI Smart Cross-Selling / Complementary Items
+  /// Suggests related accessories based on current items in the cart
+  List<Item> get smartCrossSellSuggestions {
+    if (_cart.isEmpty) return [];
+
+    final cartIds = _cart.map((c) => c.id).toSet();
+    final cartNames = _cart.map((c) => c.name.toLowerCase()).join(' ');
+    final cartCategories = _cart.map((c) => (c.category ?? '').toLowerCase()).toSet();
+
+    final Set<String> targetKeywords = {};
+
+    if (cartNames.contains('oli') || cartCategories.contains('oli') || cartCategories.contains('pelumas')) {
+      targetKeywords.addAll(['gardan', 'gear oil', 'busi', 'filter']);
+    }
+    if (cartNames.contains('ban') || cartCategories.contains('ban')) {
+      targetKeywords.addAll(['pentil', 'tubeless', 'cairan', 'dalam', 'ban dalam']);
+    }
+    if (cartNames.contains('rem') || cartNames.contains('kampas') || cartCategories.contains('rem')) {
+      targetKeywords.addAll(['minyak rem', 'brake fluid', 'cakram', 'disc']);
+    }
+    if (cartNames.contains('rantai') || cartNames.contains('gir') || cartNames.contains('gear')) {
+      targetKeywords.addAll(['chain lube', 'pelumas rantai', 'kancing rantai']);
+    }
+    if (cartNames.contains('vanbelt') || cartNames.contains('roller') || cartNames.contains('cvt')) {
+      targetKeywords.addAll(['gemuk', 'grease', 'slider', 'cvt']);
+    }
+    if (cartNames.contains('busi')) {
+      targetKeywords.addAll(['cangklong', 'tutup busi', 'oli']);
+    }
+    if (cartNames.contains('aki') || cartNames.contains('accu')) {
+      targetKeywords.addAll(['baut aki', 'kabel aki']);
+    }
+
+    if (targetKeywords.isEmpty) return [];
+
+    // Find in-stock items matching target keywords not already in cart
+    final suggestions = _allItems.where((item) {
+      if (cartIds.contains(item.id)) return false;
+      if (item.stockDisplay <= 0 && item.stockWarehouse <= 0) return false;
+
+      final name = item.name.toLowerCase();
+      final tags = item.tags.map((t) => t.toLowerCase()).join(' ');
+      return targetKeywords.any((kw) => name.contains(kw) || tags.contains(kw));
+    }).take(4).toList();
+
+    return suggestions;
+  }
+
+  /// 💵 AI Smart Cash Suggestions for quick one-tap change calculation
+  static List<int> getSmartCashSuggestions(int totalAmount) {
+    if (totalAmount <= 0) return [];
+
+    final Set<int> suggestions = {};
+
+    // 1. Exact amount
+    suggestions.add(totalAmount);
+
+    // 2. Round up to nearest 5,000 (if not exact)
+    if (totalAmount % 5000 != 0) {
+      suggestions.add(((totalAmount + 4999) ~/ 5000) * 5000);
+    }
+
+    // 3. Round up to nearest 10,000
+    if (totalAmount % 10000 != 0) {
+      suggestions.add(((totalAmount + 9999) ~/ 10000) * 10000);
+    }
+
+    // 4. Round up to nearest 20,000
+    if (totalAmount % 20000 != 0) {
+      suggestions.add(((totalAmount + 19999) ~/ 20000) * 20000);
+    }
+
+    // 5. Round up to nearest 50,000
+    if (totalAmount % 50000 != 0) {
+      suggestions.add(((totalAmount + 49999) ~/ 50000) * 50000);
+    }
+
+    // 6. Round up to nearest 100,000
+    if (totalAmount % 100000 != 0) {
+      suggestions.add(((totalAmount + 99999) ~/ 100000) * 100000);
+    }
+
+    // Standard high denominations
+    for (var bill in [50000, 100000, 150000, 200000, 300000, 500000]) {
+      if (bill > totalAmount) suggestions.add(bill);
+    }
+
+    final list = suggestions.toList()..sort();
+    return list.take(5).toList();
   }
 
   Item? findItemByCode(String code) {
@@ -210,53 +364,52 @@ class PosProvider extends ChangeNotifier {
     }
   }
 
-  void addToCart(Item item) {
-    if (item.stockDisplay <= 0) {
-      // Simple logic for MVP: If display empty, check warehouse
-      if (item.stockWarehouse > 0) {
-        // ideally show notification "Ambil di Gudang!"
-      } else {
-        return;
-      }
+  /// Quantity of [itemId] currently in the cart (0 if absent).
+  int quantityInCart(String itemId) {
+    for (final ci in _cart) {
+      if (ci.id == itemId) return ci.quantity;
     }
+    return 0;
+  }
 
-    // Check strict stock availability
-    final availableStock = item.stockDisplay + item.stockWarehouse;
+  /// Debt needs a named customer; "Pelanggan Umum" can't owe money.
+  bool get needsCustomerForDebt => _isDebt && _selectedCustomerId == 'umum';
 
+  /// Adds one unit. Returns false when the item is out of stock or the cart
+  /// already holds all available stock.
+  bool addToCart(Item item) {
+    if (item.stockDisplay <= 0) return false;
+
+    final availableStock = item.stockDisplay;
     final existingIndex = _cart.indexWhere((ci) => ci.id == item.id);
+
     if (existingIndex >= 0) {
       if (_cart[existingIndex].quantity < availableStock) {
         _cart[existingIndex].quantity++;
       } else {
-        // Show notification or just return
-        return;
+        return false;
       }
     } else {
-      if (availableStock <= 0) return; // Don't add if 0 stock
+      if (availableStock <= 0) return false;
 
-      // Use correct price based on mode
-      final price = _isWorkshopMode && item.priceWorkshop > 0
-          ? item.priceWorkshop
-          : item.sellPrice;
-
-      // Create a temporary item with the active price
       final cartItemRef = Item(
         id: item.id,
         name: item.name,
         code: item.code,
-        sellPrice: price,
+        sellPrice: item.sellPrice,
         buyPrice: item.buyPrice,
         stockDisplay: item.stockDisplay,
-        stockWarehouse: item.stockWarehouse,
-        priceWorkshop: item.priceWorkshop,
         tags: item.tags,
         category: item.category,
         imageUrl: item.imageUrl,
+        locationDisplay: item.locationDisplay,
+        description: item.description,
       );
 
       _cart.add(CartItem(item: cartItemRef));
     }
     notifyListeners();
+    return true;
   }
 
   void updateQuantity(String itemId, int delta) {
@@ -264,9 +417,7 @@ class PosProvider extends ChangeNotifier {
     if (index == -1) return;
 
     final newQty = _cart[index].quantity + delta;
-    // Allow selling up to Display + Warehouse logic
-    // For now, strict check against total stock
-    final maxStock = _cart[index].stockDisplay + _cart[index].stockWarehouse;
+    final maxStock = _cart[index].stockDisplay;
 
     if (newQty > 0 && newQty <= maxStock) {
       _cart[index].quantity = newQty;
@@ -306,7 +457,7 @@ class PosProvider extends ChangeNotifier {
     if (_selectedCustomerId != 'umum') {
       final c = _customers.firstWhere(
         (cust) => cust.id == _selectedCustomerId,
-        orElse: () => Customer(id: '', name: ''),
+        orElse: () => Customer(id: '', name: '', phone: '', address: ''),
       );
       if (c.id.isNotEmpty) customerName = c.name;
     }
@@ -321,30 +472,28 @@ class PosProvider extends ChangeNotifier {
         .map(
           (item) => {
             'id': item.id,
-            'itemId': item.id, // For consistency
+            'itemId': item.id,
             'name': item.name,
             'itemName': item.name,
             'quantity': item.quantity,
             'sellPrice': item.sellPrice,
             'buyPrice': item.buyPrice,
             'category': item.category ?? 'Lain-lain',
-            'stockDisplay': item.stockDisplay, // Needed for finalization logic
-            'stockWarehouse': item.stockWarehouse,
-            'priceWorkshop': item.priceWorkshop,
+            'stock': item.stockDisplay,
           },
         )
         .toList();
 
     return {
       'id': transactionId,
-      'customerId': _selectedCustomerId, // Needed for finalization
+      'customerId': _selectedCustomerId,
       'customerName': customerName,
       'paymentMethod': derivedPaymentMethod,
       'status': derivedPaymentMethod == 'debt' ? 'unpaid' : 'paid',
       'totalAmount': totalAmount,
       'totalProfit': totalProfit,
       'items': itemsMapList,
-      'transactionDate': DateTime.now(), // Visual only
+      'transactionDate': DateTime.now(),
     };
   }
 
@@ -356,79 +505,68 @@ class PosProvider extends ChangeNotifier {
 
       final items = transactionData['items'] as List<dynamic>;
 
-      // --- STEP 1: Fetch and validate all stock in one pass ---
-      final Map<String, Map<String, int>> stockCache = {};
-
+      // Sum quantities per item in case the same item appears twice.
+      final Map<String, int> qtyById = {};
+      final Map<String, String> nameById = {};
       for (var itemMap in items) {
-        final itemId = itemMap['id'];
-        final quantity = itemMap['quantity'] as int;
-
-        // Get latest stock from Firestore
-        final itemDoc = await _db.collection('items').doc(itemId).get();
-        if (!itemDoc.exists) {
-          throw Exception("Item ${itemMap['name']} tidak ditemukan!");
-        }
-
-        final data = itemDoc.data()!;
-        final currentDisplay = (data['qty_display'] as num?)?.toInt() ?? 0;
-        final currentWarehouse = (data['qty_warehouse'] as num?)?.toInt() ?? 0;
-        final totalAvailable = currentDisplay + currentWarehouse;
-
-        if (quantity > totalAvailable) {
-          throw Exception(
-            "Stok ${itemMap['name']} tidak cukup! (Tersedia: $totalAvailable, Diminta: $quantity)",
-          );
-        }
-
-        // Cache for later use
-        stockCache[itemId] = {
-          'display': currentDisplay,
-          'warehouse': currentWarehouse,
-        };
+        final itemId = itemMap['id'] as String;
+        qtyById[itemId] = (qtyById[itemId] ?? 0) + (itemMap['quantity'] as int);
+        nameById[itemId] = itemMap['name']?.toString() ?? itemId;
       }
 
-      // --- STEP 2: Commit Transaction ---
-      final batch = _db.batch();
       final transactionRef = _db
           .collection('transactions')
           .doc(transactionData['id']);
 
-      // Create Transaction
-      batch.set(transactionRef, {
-        ...transactionData,
-        'transactionDate': FieldValue.serverTimestamp(),
-      });
-
-      // Update Stock (Smart deduction: Display first, then Warehouse)
-      for (var itemMap in items) {
-        final itemId = itemMap['id'];
-        final quantity = itemMap['quantity'] as int;
-
-        // Use cached values
-        final stock = stockCache[itemId]!;
-        final currentDisplay = stock['display']!;
-
-        int deductFromDisplay = 0;
-        int deductFromWarehouse = 0;
-
-        if (currentDisplay >= quantity) {
-          deductFromDisplay = quantity;
-        } else {
-          deductFromDisplay = currentDisplay;
-          deductFromWarehouse = quantity - currentDisplay;
+      // Read + validate + write atomically: if another cashier sells the same
+      // item at the same moment, Firestore retries this block with fresh stock,
+      // so stock can never go below zero.
+      await _db.runTransaction((tx) async {
+        // All reads must happen before any write inside a transaction.
+        final Map<String, DocumentSnapshot<Map<String, dynamic>>> snaps = {};
+        for (final itemId in qtyById.keys) {
+          snaps[itemId] = await tx.get(_db.collection('items').doc(itemId));
         }
 
-        final itemRef = _db.collection('items').doc(itemId);
+        for (final entry in qtyById.entries) {
+          final snap = snaps[entry.key]!;
+          if (!snap.exists) {
+            throw Exception("Item ${nameById[entry.key]} tidak ditemukan!");
+          }
+          final data = snap.data()!;
+          final currentStock =
+              ((data['stock'] ?? data['qty_display'] ?? data['qty_warehouse'])
+                      as num?)
+                  ?.toInt() ??
+              0;
+          if (entry.value > currentStock) {
+            throw Exception(
+              "Stok ${nameById[entry.key]} tidak cukup! (Tersedia: $currentStock, Diminta: ${entry.value})",
+            );
+          }
+        }
 
-        batch.update(itemRef, {
-          'qty_display': FieldValue.increment(-deductFromDisplay),
-          'qty_warehouse': FieldValue.increment(-deductFromWarehouse),
-          'stock': FieldValue.increment(-deductFromDisplay),
-          'updatedAt': FieldValue.serverTimestamp(),
+        tx.set(transactionRef, {
+          ...transactionData,
+          'transactionDate': FieldValue.serverTimestamp(),
         });
-      }
 
-      await batch.commit();
+        // Write absolute values (read in this transaction) so both stock
+        // fields stay in sync, even for older items without `stock`.
+        for (final entry in qtyById.entries) {
+          final data = snaps[entry.key]!.data()!;
+          final current =
+              ((data['stock'] ?? data['qty_display'] ?? data['qty_warehouse'])
+                          as num?)
+                      ?.toInt() ??
+                  0;
+          tx.update(_db.collection('items').doc(entry.key), {
+            'stock': current - entry.value,
+            'qty_display': current - entry.value,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      });
 
       // Clear cart ONLY after success
       _cart.clear();

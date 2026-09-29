@@ -3,112 +3,119 @@ import 'package:provider/provider.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../ui/desktop_scaffold.dart';
+import '../../ui/app_list.dart';
+import '../items/items_provider.dart';
 import 'categories_provider.dart';
 import 'category_form_screen.dart';
+import 'category_model.dart';
 
 import '../../core/theme.dart';
 
-class CategoriesListScreen extends StatelessWidget {
-  const CategoriesListScreen({Key? key}) : super(key: key);
+class CategoriesListScreen extends StatefulWidget {
+  const CategoriesListScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final provider = Provider.of<CategoriesProvider>(context, listen: false);
+  State<CategoriesListScreen> createState() => _CategoriesListScreenState();
+}
 
+class _CategoriesListScreenState extends State<CategoriesListScreen> {
+  @override
+  void initState() {
+    super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = context.read<CategoriesProvider>();
       if (provider.categories.isEmpty) provider.fetchCategories();
     });
+  }
 
-    // Desktop Layout
-    if (DesktopScaffold.isDesktop) {
-      return DesktopScaffold(
-        activeRoute: '/categories',
-        floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const CategoryFormScreen(),
-              ),
-            );
-          },
-          backgroundColor: AppColors.primary,
-          child: const Icon(LucideIcons.plus, color: Colors.white),
-        ),
-        body: Consumer<CategoriesProvider>(
-          builder: (context, provider, child) {
-            return _buildListBody(context, provider);
-          },
-        ),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Kategori Barang"),
-        actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.plus),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const CategoryFormScreen(),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      body: Consumer<CategoriesProvider>(
-        builder: (context, provider, child) {
-          return _buildListBody(context, provider);
-        },
-      ),
+  void _openForm([CategoryModel? category]) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => CategoryFormScreen(category: category)),
     );
   }
 
-  Widget _buildListBody(BuildContext context, CategoriesProvider provider) {
+  @override
+  Widget build(BuildContext context) {
+    final fab = FloatingActionButton.extended(
+      onPressed: _openForm,
+      icon: const Icon(LucideIcons.plus),
+      label: const Text("Tambah Kategori"),
+    );
+    final body = Consumer2<CategoriesProvider, ItemsProvider>(
+      builder: (context, provider, items, _) => _buildListBody(provider, items),
+    );
+
+    if (DesktopScaffold.isDesktop) {
+      return DesktopScaffold(
+        activeRoute: '/categories',
+        floatingActionButton: fab,
+        body: body,
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: const Text("Kategori")),
+      floatingActionButton: fab,
+      body: body,
+    );
+  }
+
+  Widget _buildListBody(CategoriesProvider provider, ItemsProvider items) {
     if (provider.isLoading && provider.categories.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator.adaptive());
     }
 
     if (provider.categories.isEmpty) {
-      return const Center(child: Text("Belum ada kategori"));
+      return AppEmptyState(
+        icon: LucideIcons.folderTree,
+        title: "Belum ada kategori",
+        message: "Kelompokkan barang (Oli, Ban, Rem, ...) agar mudah dicari di Kasir.",
+        actionLabel: "Tambah Kategori",
+        onAction: _openForm,
+      );
     }
+
+    // Item count per category name
+    final counts = <String, int>{};
+    for (final item in items.items) {
+      final c = item.category ?? 'Umum';
+      counts[c] = (counts[c] ?? 0) + 1;
+    }
+    final categories = [...provider.categories]
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     return RefreshIndicator(
       onRefresh: provider.fetchCategories,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: provider.categories.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, index) {
-          final category = provider.categories[index];
-          return Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: const BorderSide(color: AppColors.border),
-            ),
-            child: ListTile(
-              title: Text(
-                category.name,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              trailing: const Icon(LucideIcons.chevronRight, size: 20),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        CategoryFormScreen(category: category),
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            sliver: AppListPanelSliver(
+              itemCount: categories.length,
+              itemBuilder: (context, index) {
+                final category = categories[index];
+                final n = counts[category.name] ?? 0;
+                return ListTile(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  title: Text(
+                    category.name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
+                  subtitle: Text(n == 0 ? "Belum ada barang" : "$n barang"),
+                  trailing: const Icon(
+                    LucideIcons.chevronRight,
+                    size: 18,
+                    color: AppColors.mutedForeground,
+                  ),
+                  onTap: () => _openForm(category),
                 );
               },
             ),
-          );
-        },
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 96)),
+        ],
       ),
     );
   }

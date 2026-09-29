@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme.dart';
 
+import '../../ui/app_list.dart';
 import '../../ui/desktop_scaffold.dart';
 import 'stock_opname_provider.dart';
 import 'stock_opname_form_screen.dart';
@@ -20,144 +21,138 @@ class _StockOpnameListScreenState extends State<StockOpnameListScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<StockOpnameProvider>(context, listen: false).fetchHistory();
+      context.read<StockOpnameProvider>().fetchHistory();
     });
+  }
+
+  void _startNew() {
+    context.read<StockOpnameProvider>().startNewOpname();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const StockOpnameFormScreen()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<StockOpnameProvider>(context);
+    final provider = context.watch<StockOpnameProvider>();
+    final fab = FloatingActionButton.extended(
+      onPressed: _startNew,
+      icon: const Icon(LucideIcons.clipboardList),
+      label: const Text("Mulai Hitung Stok"),
+    );
 
-    // Desktop Layout
-    if (DesktopScaffold.isDesktop) {
-      return DesktopScaffold(
-        activeRoute: '/stock-opname',
-        body: Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            title: const Text("Stock Opname (Audit)"),
-            elevation: 0,
-            backgroundColor:
-                Colors.transparent, // Let desktop background show or keep white
-            actions: [
-              IconButton(
-                icon: const Icon(LucideIcons.plus),
-                onPressed: () {
-                  provider.startNewOpname();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const StockOpnameFormScreen(),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          body: _buildList(provider),
-        ),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Stock Opname (Audit)"),
-        actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.plus),
-            onPressed: () {
-              provider.startNewOpname();
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const StockOpnameFormScreen(),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
+    final scaffold = Scaffold(
+      appBar: AppBar(title: const Text("Stock Opname")),
+      floatingActionButton: fab,
       body: _buildList(provider),
     );
+
+    if (DesktopScaffold.isDesktop) {
+      return DesktopScaffold(activeRoute: '/stock-opname', body: scaffold);
+    }
+    return scaffold;
   }
 
   Widget _buildList(StockOpnameProvider provider) {
-    return provider.isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : provider.history.isEmpty
-        ? const Center(child: Text("Belum ada riwayat audit"))
-        : ListView.separated(
-            padding: const EdgeInsets.all(16),
+    if (provider.isLoading && provider.history.isEmpty) {
+      return const Center(child: CircularProgressIndicator.adaptive());
+    }
+    if (provider.history.isEmpty) {
+      return AppEmptyState(
+        icon: LucideIcons.clipboardCheck,
+        title: "Belum pernah hitung stok",
+        message:
+            "Cocokkan jumlah barang di rak dengan catatan aplikasi. Selisihnya disesuaikan otomatis.",
+        actionLabel: "Mulai Hitung Stok",
+        onAction: _startNew,
+      );
+    }
+
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          sliver: AppListPanelSliver(
             itemCount: provider.history.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final opname = provider.history[index];
-              return Card(
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      LucideIcons.clipboardCheck,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  title: Text(
-                    DateFormat('dd MMM yyyy, HH:mm').format(opname.date),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(
-                    "Oleh: ${opname.staffName} • ${opname.items.length} Barang",
-                  ),
-                  trailing: const Icon(LucideIcons.chevronRight),
-                  onTap: () {
-                    // View Detail (Future Improvement)
-                    // For now just show a simple dialog
-                    showDialog(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        title: const Text("Detail Audit"),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ...opname.items
-                                .map(
-                                  (e) => ListTile(
-                                    title: Text(e.itemName),
-                                    subtitle: Text(
-                                      "Sistem: ${e.systemStock} -> Fisik: ${e.actualStock}",
-                                    ),
-                                    trailing: Text(
-                                      "${e.difference > 0 ? '+' : ''}${e.difference}",
-                                      style: TextStyle(
-                                        color: e.difference == 0
-                                            ? Colors.grey
-                                            : (e.difference > 0
-                                                  ? Colors.green
-                                                  : Colors.red),
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                          ],
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text("Tutup"),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+              final mismatched =
+                  opname.items.where((e) => e.difference != 0).length;
+              return ListTile(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                title: Text(
+                  DateFormat('d MMMM yyyy, HH:mm', 'id_ID').format(opname.date),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
+                subtitle: Text(
+                  "${opname.staffName} · ${opname.items.length} barang"
+                  "${mismatched > 0 ? ' · $mismatched selisih' : ' · semua cocok'}",
+                ),
+                trailing: const Icon(
+                  LucideIcons.chevronRight,
+                  size: 18,
+                  color: AppColors.mutedForeground,
+                ),
+                onTap: () => _showDetail(opname),
               );
             },
-          );
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 96)),
+      ],
+    );
+  }
+
+  void _showDetail(dynamic opname) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.95,
+        builder: (_, controller) => ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          children: [
+            Text(
+              "Hitung stok ${DateFormat('d MMM yyyy', 'id_ID').format(opname.date)}",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            Text(
+              [
+                "Oleh ${opname.staffName}",
+                if ((opname.note ?? '').isNotEmpty) opname.note,
+              ].join(" · "),
+              style: const TextStyle(fontSize: 14, color: AppColors.mutedForeground),
+            ),
+            const SizedBox(height: 12),
+            for (final e in opname.items)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(e.itemName),
+                subtitle: Text("Sistem ${e.systemStock} → fisik ${e.actualStock}"),
+                trailing: Text(
+                  e.difference == 0
+                      ? "Cocok"
+                      : "${e.difference > 0 ? '+' : ''}${e.difference}",
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: e.difference == 0
+                        ? AppColors.successStrong
+                        : (e.difference > 0
+                            ? AppColors.primary
+                            : AppColors.destructiveStrong),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

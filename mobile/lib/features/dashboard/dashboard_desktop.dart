@@ -93,7 +93,7 @@ class DashboardDesktop extends StatelessWidget {
                           child: Container(
                             padding: const EdgeInsets.all(4),
                             decoration: const BoxDecoration(
-                              color: Colors.red,
+                              color: AppColors.destructive,
                               shape: BoxShape.circle,
                             ),
                             constraints: const BoxConstraints(
@@ -105,7 +105,7 @@ class DashboardDesktop extends StatelessWidget {
                                 pendingCount > 9 ? '9+' : '$pendingCount',
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 10,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -144,7 +144,7 @@ class DashboardDesktop extends StatelessWidget {
                                   dashboardProvider.totalSales,
                                 ),
                                 LucideIcons.banknote,
-                                Colors.blue,
+                                AppColors.primary,
                               ),
                             ),
                             const SizedBox(width: 24),
@@ -153,7 +153,7 @@ class DashboardDesktop extends StatelessWidget {
                                 "Transaksi",
                                 "${dashboardProvider.transactionCount}",
                                 LucideIcons.shoppingBag,
-                                Colors.green,
+                                AppColors.success,
                               ),
                             ),
                             const SizedBox(width: 24),
@@ -162,7 +162,7 @@ class DashboardDesktop extends StatelessWidget {
                                 "Pelanggan",
                                 "${dashboardProvider.customerCount}",
                                 LucideIcons.users,
-                                Colors.orange,
+                                AppColors.warning,
                               ),
                             ),
                             const SizedBox(width: 24),
@@ -175,7 +175,7 @@ class DashboardDesktop extends StatelessWidget {
                                       )
                                     : "Rp *****",
                                 LucideIcons.trendingUp,
-                                Colors.purple,
+                                AppColors.primary,
                               ),
                             ),
                           ],
@@ -192,7 +192,7 @@ class DashboardDesktop extends StatelessWidget {
                                       dashboardProvider.totalSales,
                                     ),
                                     LucideIcons.banknote,
-                                    Colors.blue,
+                                    AppColors.primary,
                                   ),
                                 ),
                                 const SizedBox(width: 24),
@@ -201,7 +201,7 @@ class DashboardDesktop extends StatelessWidget {
                                     "Transaksi",
                                     "${dashboardProvider.transactionCount}",
                                     LucideIcons.shoppingBag,
-                                    Colors.green,
+                                    AppColors.success,
                                   ),
                                 ),
                               ],
@@ -214,7 +214,7 @@ class DashboardDesktop extends StatelessWidget {
                                     "Pelanggan",
                                     "${dashboardProvider.customerCount}",
                                     LucideIcons.users,
-                                    Colors.orange,
+                                    AppColors.warning,
                                   ),
                                 ),
                                 const SizedBox(width: 24),
@@ -227,7 +227,7 @@ class DashboardDesktop extends StatelessWidget {
                                           )
                                         : "Rp *****",
                                     LucideIcons.trendingUp,
-                                    Colors.purple,
+                                    AppColors.primary,
                                   ),
                                 ),
                               ],
@@ -305,11 +305,11 @@ class DashboardDesktop extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(LucideIcons.lock, size: 48, color: Colors.grey),
+                        Icon(LucideIcons.lock, size: 48, color: AppColors.mutedForeground),
                         SizedBox(height: 16),
                         Text(
                           "Akses Terbatas (Admin Only)",
-                          style: TextStyle(color: Colors.grey),
+                          style: TextStyle(color: AppColors.mutedForeground),
                         ),
                       ],
                     ),
@@ -347,7 +347,7 @@ class DashboardDesktop extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 28),
@@ -359,7 +359,7 @@ class DashboardDesktop extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(color: Colors.grey, fontSize: 14),
+                  style: const TextStyle(color: AppColors.mutedForeground, fontSize: 14),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),

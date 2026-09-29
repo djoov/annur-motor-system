@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
 
+/// Text field styled by `AppTheme.inputDecorationTheme` (radius 14, blue focus).
 class CustomInput extends StatelessWidget {
   final String placeholder;
   final String? label;
@@ -10,9 +11,9 @@ class CustomInput extends StatelessWidget {
   final Function(String)? onChanged;
   final String? Function(String?)? validator;
   final Widget? suffixIcon;
-  final Widget? prefixIcon; // Added prefixIcon
-  final FocusNode? focusNode; // Restored
-  final int maxLines; // Added maxLines
+  final Widget? prefixIcon;
+  final FocusNode? focusNode;
+  final int maxLines;
 
   const CustomInput({
     super.key,
@@ -24,58 +25,30 @@ class CustomInput extends StatelessWidget {
     this.onChanged,
     this.validator,
     this.suffixIcon,
-    this.prefixIcon, // Added here
+    this.prefixIcon,
     this.focusNode,
-    this.maxLines = 1, // Default to 1
+    this.maxLines = 1,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: TextFormField(
-        // Changed to TextFormField
         focusNode: focusNode,
         controller: controller,
         obscureText: obscureText,
         keyboardType: keyboardType,
-        maxLines: maxLines, // Pass maxLines
+        maxLines: maxLines,
         onChanged: onChanged,
-        validator: validator, // Connected validator
-        style: const TextStyle(fontSize: 14, color: AppColors.foreground),
+        validator: validator,
+        textInputAction: maxLines > 1 ? TextInputAction.newline : TextInputAction.next,
+        style: const TextStyle(fontSize: 15, color: AppColors.foreground),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: AppColors.mutedForeground),
           hintText: placeholder,
-          hintStyle: const TextStyle(color: AppColors.mutedForeground),
-          // Icons
           prefixIcon: prefixIcon,
           suffixIcon: suffixIcon,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 12,
-          ),
-          filled: true,
-          fillColor: AppColors.background,
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AppColors.input),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AppColors.ring, width: 1.5),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AppColors.destructive),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(
-              color: AppColors.destructive,
-              width: 1.5,
-            ),
-          ),
         ),
       ),
     );

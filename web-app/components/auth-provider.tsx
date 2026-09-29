@@ -60,10 +60,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             role: userData.role || "staff"
           });
         } else {
+          // New accounts wait for admin approval (see firestore.rules)
           const newUserData = {
             name: firebaseUser.displayName || "Pengguna Baru",
             email: firebaseUser.email,
-            role: "staff",
+            role: "pending",
             createdAt: serverTimestamp()
           };
           await setDoc(userDocRef, newUserData);

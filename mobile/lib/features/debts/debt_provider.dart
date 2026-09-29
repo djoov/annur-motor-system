@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'models/debt_model.dart';
-import '../customers/customer_model.dart';
 
 class DebtProvider extends ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -32,14 +31,22 @@ class DebtProvider extends ChangeNotifier {
     try {
       _streamSubscription = _db
           .collection('debts')
-          .where('status', whereIn: ['unpaid', 'partial'])
-          .orderBy('createdAt', descending: true)
           .snapshots()
           .listen(
             (snapshot) {
               _debts = snapshot.docs
-                  .map((doc) => DebtModel.fromFirestore(doc))
-                  .toList();
+                  .map((doc) {
+                    try {
+                      return DebtModel.fromFirestore(doc);
+                    } catch (e) {
+                      print("Error parsing debt ${doc.id}: $e");
+                      return null;
+                    }
+                  })
+                  .whereType<DebtModel>()
+                  .where((d) => d.status == 'unpaid' || d.status == 'partial')
+                  .toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
               _isLoading = false;
               notifyListeners();
             },
@@ -50,7 +57,7 @@ class DebtProvider extends ChangeNotifier {
             },
           );
     } catch (e) {
-      print("Error setting up debt stream: $e");
+      print("Error listening to debts: $e");
       _isLoading = false;
       notifyListeners();
     }

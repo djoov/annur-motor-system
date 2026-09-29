@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:io'; // For Platform check
+import 'package:flutter/foundation.dart';
 
 class ResponsiveLayout extends StatelessWidget {
   final Widget mobileBody;
@@ -11,11 +11,15 @@ class ResponsiveLayout extends StatelessWidget {
     required this.desktopBody,
   }) : super(key: key);
 
+  // dart:io Platform throws on web, so check via defaultTargetPlatform.
+  static bool get _isWindows =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+
   static bool isDesktop(BuildContext context) {
     // If on Windows, always consider it "Desktop-class" capability,
     // though we might still adapt internal grids based on width.
     // But for High-Level layout (Sidebar vs BottomNav), we prefer Desktop.
-    if (Platform.isWindows) return true;
+    if (_isWindows) return true;
     return MediaQuery.of(context).size.width >= 900;
   }
 
@@ -26,7 +30,7 @@ class ResponsiveLayout extends StatelessWidget {
         // On Windows, strictly prevent MobileBody unless window is absurdly small (<400)
         // or user specifically requested this behavior.
         // The user wants "Native PC Look", so we force desktopBody on Windows.
-        if (Platform.isWindows) {
+        if (_isWindows) {
           return desktopBody;
         }
 

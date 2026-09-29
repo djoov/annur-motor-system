@@ -8,6 +8,10 @@ class CategoriesProvider extends ChangeNotifier {
   List<CategoryModel> _categories = [];
   bool _isLoading = false;
 
+  CategoriesProvider() {
+    fetchCategories();
+  }
+
   List<CategoryModel> get categories => _categories;
   bool get isLoading => _isLoading;
 
@@ -16,10 +20,16 @@ class CategoriesProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final snapshot = await _db.collection('categories').orderBy('name').get();
-      _categories = snapshot.docs
-          .map((doc) => CategoryModel.fromFirestore(doc))
-          .toList();
+      final snapshot = await _db.collection('categories').get();
+      _categories = snapshot.docs.map((doc) {
+        try {
+          return CategoryModel.fromFirestore(doc);
+        } catch (e) {
+          print("Error parsing category ${doc.id}: $e");
+          return null;
+        }
+      }).whereType<CategoryModel>().toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     } catch (e) {
       print("Error fetching categories: $e");
     } finally {

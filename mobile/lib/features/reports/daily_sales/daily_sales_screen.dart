@@ -5,54 +5,58 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/theme.dart';
 
 import '../../../ui/desktop_scaffold.dart';
+import '../../../ui/app_list.dart';
 import 'daily_sales_provider.dart';
 import '../../../../core/services/export_service.dart';
 
+const _tabular = [FontFeature.tabularFigures()];
+
+final _rupiah = NumberFormat.currency(
+  locale: 'id_ID',
+  symbol: 'Rp ',
+  decimalDigits: 0,
+);
+
+/// Owner-only daily report (shows profit).
 class DailySalesScreen extends StatefulWidget {
-  const DailySalesScreen({Key? key}) : super(key: key);
+  const DailySalesScreen({super.key});
 
   @override
   State<DailySalesScreen> createState() => _DailySalesScreenState();
 }
 
 class _DailySalesScreenState extends State<DailySalesScreen> {
-  Future<void> _selectDate(BuildContext context) async {
-    final provider = Provider.of<DailySalesProvider>(context, listen: false);
+  Future<void> _selectDate() async {
+    final provider = context.read<DailySalesProvider>();
     final picked = await showDatePicker(
       context: context,
       initialDate: provider.selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            primaryColor: AppColors.primary,
-            colorScheme: const ColorScheme.light(primary: AppColors.primary),
-          ),
-          child: child!,
-        );
-      },
+      helpText: "Pilih tanggal",
     );
-    if (picked != null) {
-      provider.setDate(picked);
-    }
+    if (picked != null) provider.setDate(picked);
   }
 
-  Future<void> _handleExport(BuildContext context) async {
-    final provider = Provider.of<DailySalesProvider>(context, listen: false);
+  void _shiftDay(int days) {
+    final provider = context.read<DailySalesProvider>();
+    final next = provider.selectedDate.add(Duration(days: days));
+    if (next.isAfter(DateTime.now())) return;
+    provider.setDate(next);
+  }
+
+  Future<void> _handleExport() async {
+    final provider = context.read<DailySalesProvider>();
+    final messenger = ScaffoldMessenger.of(context);
     if (provider.transactions.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Tidak ada transaksi untuk diexport.")),
+      messenger.showSnackBar(
+        const SnackBar(content: Text("Tidak ada transaksi untuk diekspor")),
       );
       return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Menyiapkan laporan...")));
-
     try {
-      final headers = [
+      const headers = [
         "WAKTU",
         "NO. INVOICE",
         "PELANGGAN",
@@ -65,10 +69,8 @@ class _DailySalesScreenState extends State<DailySalesScreen> {
       ];
 
       final rows = provider.transactions.map((trx) {
-        final itemsStr = trx.items
-            .map((i) => "${i.itemName} (${i.quantity})")
-            .join('; ');
-
+        final itemsStr =
+            trx.items.map((i) => "${i.itemName} (${i.quantity})").join('; ');
         return [
           DateFormat('HH:mm:ss').format(trx.date),
           trx.id,
@@ -83,323 +85,261 @@ class _DailySalesScreenState extends State<DailySalesScreen> {
       }).toList();
 
       final dateStr = DateFormat('yyyy-MM-dd').format(provider.selectedDate);
-      final fileName = "Laporan_Penjualan_$dateStr.csv";
-
       await ExportService.exportToCSV(
         headers: headers,
         data: rows,
-        fileName: fileName,
+        fileName: "Laporan_Penjualan_$dateStr.csv",
       );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Laporan $dateStr berhasil diexport."),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      messenger.showSnackBar(
+        SnackBar(content: Text("Laporan $dateStr diekspor")),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Gagal export: $e"),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Gagal ekspor: $e"),
+          backgroundColor: AppColors.destructiveStrong,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp ',
-      decimalDigits: 0,
-    );
-    final dateFormat = DateFormat('EEEE, dd MMMM yyyy', 'id_ID');
-
-    // Desktop Layout
-    if (DesktopScaffold.isDesktop) {
-      return DesktopScaffold(
-        activeRoute: '/report-sales',
-        body: Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            title: const Text("Penjualan Harian"),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            actions: [
-              IconButton(
-                icon: const Icon(LucideIcons.download),
-                tooltip: "Export Laporan",
-                onPressed: () => _handleExport(context),
-              ),
-              IconButton(
-                icon: const Icon(LucideIcons.calendar),
-                onPressed: () => _selectDate(context),
-                tooltip: "Pilih Tanggal",
-              ),
-            ],
-          ),
-          body: Consumer<DailySalesProvider>(
-            builder: (context, provider, child) {
-              return _buildContent(provider, dateFormat, currencyFormat);
-            },
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
+    final scaffold = Scaffold(
       appBar: AppBar(
-        title: const Text("Penjualan Harian"),
+        title: const Text("Laporan Penjualan"),
         actions: [
           IconButton(
-            icon: const Icon(LucideIcons.calendar),
-            onPressed: () => _selectDate(context),
-            tooltip: "Pilih Tanggal",
+            icon: const Icon(LucideIcons.download),
+            tooltip: "Ekspor CSV",
+            onPressed: _handleExport,
           ),
         ],
       ),
       body: Consumer<DailySalesProvider>(
-        builder: (context, provider, child) {
-          return _buildContent(provider, dateFormat, currencyFormat);
-        },
+        builder: (context, provider, _) => _buildContent(provider),
       ),
     );
+
+    if (DesktopScaffold.isDesktop) {
+      return DesktopScaffold(activeRoute: '/daily_sales', body: scaffold);
+    }
+    return scaffold;
   }
 
-  Widget _buildContent(
-    DailySalesProvider provider,
-    DateFormat dateFormat,
-    NumberFormat currencyFormat,
-  ) {
-    return Column(
-      children: [
-        // Header Summary
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Text(
-                    dateFormat.format(provider.selectedDate),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (provider.isLoading)
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildSummaryBox(
-                      "Total Omset",
-                      currencyFormat.format(provider.totalRevenue),
-                      LucideIcons.banknote,
-                      Colors.blue.shade50,
-                      Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildSummaryBox(
-                      "Keuntungan",
-                      currencyFormat.format(provider.totalProfit),
-                      LucideIcons.trendingUp,
-                      Colors.green.shade50,
-                      Colors.green,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildSummaryBox(
-                      "Barang Terjual",
-                      "${provider.totalItemsSold} Pcs",
-                      LucideIcons.package,
-                      Colors.orange.shade50,
-                      Colors.orange,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+  Widget _buildContent(DailySalesProvider provider) {
+    final date = provider.selectedDate;
+    final now = DateTime.now();
+    final isToday =
+        date.year == now.year && date.month == now.month && date.day == now.day;
+    final items = [...provider.salesItems]
+      ..sort((a, b) => b.totalRevenue.compareTo(a.totalRevenue));
 
-        // Item List
-        Expanded(
-          child: provider.isLoading && provider.salesItems.isEmpty
-              ? const Center(child: CircularProgressIndicator())
-              : provider.salesItems.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        LucideIcons.packageX,
-                        size: 64,
-                        color: Colors.grey.shade300,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        "Tidak ada penjualan pada tanggal ini",
-                        style: TextStyle(color: Colors.grey.shade500),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: provider.salesItems.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final item = provider.salesItems[index];
-                    return _buildItemCard(item, currencyFormat);
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSummaryBox(
-    String label,
-    String value,
-    IconData icon,
-    Color bg,
-    Color color,
-  ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              color: color.withOpacity(0.9),
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildItemCard(DailySalesItem item, NumberFormat currencyFormat) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
+            child: Row(
               children: [
-                Text(
-                  item.itemName,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+                IconButton(
+                  tooltip: "Hari sebelumnya",
+                  icon: const Icon(LucideIcons.arrowLeft),
+                  onPressed: () => _shiftDay(-1),
+                ),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: _selectDate,
+                    icon: const Icon(LucideIcons.calendar, size: 18),
+                    label: Text(
+                      isToday
+                          ? "Hari ini, ${DateFormat('d MMMM', 'id_ID').format(date)}"
+                          : DateFormat('EEEE, d MMMM yyyy', 'id_ID').format(date),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: AppColors.foreground,
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  "${item.quantity} Terjual",
-                  style: const TextStyle(
-                    color: AppColors.mutedForeground,
-                    fontSize: 12,
-                  ),
+                IconButton(
+                  tooltip: "Hari berikutnya",
+                  icon: const Icon(LucideIcons.arrowRight),
+                  onPressed: isToday ? null : () => _shiftDay(1),
                 ),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                currencyFormat.format(item.totalRevenue),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: AppColors.primary,
-                ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.brandNavy,
+                borderRadius: BorderRadius.circular(20),
               ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  "Profit: ${currencyFormat.format(item.totalProfit)}",
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.green.shade700,
-                    fontWeight: FontWeight.bold,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Omzet",
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white.withValues(alpha: 0.78),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 4),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _rupiah.format(provider.totalRevenue),
+                      style: const TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.brandYellow,
+                        fontFeatures: _tabular,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _HeroStat("Laba", _rupiah.format(provider.totalProfit)),
+                      const SizedBox(width: 24),
+                      _HeroStat("Transaksi", "${provider.transactions.length}"),
+                      const SizedBox(width: 24),
+                      _HeroStat("Barang", "${provider.totalItemsSold}"),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, 24, 16, 12),
+            child: Text(
+              "Barang terjual",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+        if (provider.isLoading && items.isEmpty)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(child: CircularProgressIndicator.adaptive()),
+            ),
+          )
+        else if (items.isEmpty)
+          const SliverToBoxAdapter(
+            child: AppEmptyState(
+              icon: LucideIcons.packageX,
+              title: "Tidak ada penjualan",
+              message: "Belum ada transaksi di tanggal ini.",
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: AppListPanelSliver(
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.itemName,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              "${item.quantity} terjual",
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            _rupiah.format(item.totalRevenue),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: _tabular,
+                            ),
+                          ),
+                          Text(
+                            "laba ${_rupiah.format(item.totalProfit)}",
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppColors.successStrong,
+                              fontFeatures: _tabular,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+      ],
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _HeroStat(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return Flexible(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.7),
+            ),
+          ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+                fontFeatures: _tabular,
+              ),
+            ),
           ),
         ],
       ),

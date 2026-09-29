@@ -46,7 +46,7 @@ class UserModel {
     return UserModel(
       id: doc.id,
       email: data['email'] ?? '',
-      role: data['role'] ?? 'staff',
+      role: data['role'] ?? 'pending',
       name: data['name'] ?? 'User',
       lastActive: lastActiveTime,
       deviceInfo: data['deviceInfo'],

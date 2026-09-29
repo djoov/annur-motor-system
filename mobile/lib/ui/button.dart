@@ -26,28 +26,35 @@ class CustomButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Base colors
-    Color bgColor =
-        color ??
-        (isDestructive
-            ? AppColors.destructive
-            : (isOutline ? Colors.transparent : AppColors.primary));
-    Color fgColor = isDestructive
-        ? AppColors.destructiveForeground
-        : (isOutline ? AppColors.primary : AppColors.primaryForeground);
-    Color borderColor = isOutline ? AppColors.input : Colors.transparent;
+    final Color accent = isDestructive
+        ? AppColors.destructive
+        : (color ?? AppColors.primary);
+
+    // Outline buttons: transparent with colored text; destructive text uses the
+    // darker red for contrast.
+    final Color bgColor = isOutline ? Colors.transparent : accent;
+    final Color fgColor = isOutline
+        ? (isDestructive ? AppColors.destructiveStrong : accent)
+        : Colors.white;
+    final BorderSide? side = isOutline
+        ? BorderSide(
+            color: isDestructive
+                ? AppColors.destructive.withValues(alpha: 0.4)
+                : AppColors.border,
+          )
+        : null;
 
     return SizedBox(
       width: width ?? double.infinity,
-      height: 48,
+      height: 52,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: bgColor,
           foregroundColor: fgColor,
           elevation: 0,
           shadowColor: Colors.transparent,
-          side: isOutline ? BorderSide(color: borderColor) : null,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          side: side,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
         onPressed: isLoading ? null : onPressed,
         child: isLoading
@@ -56,21 +63,26 @@ class CustomButton extends StatelessWidget {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(fgColor),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isOutline ? fgColor : AppColors.mutedForeground,
+                  ),
                 ),
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (icon != null) ...[
-                    Icon(icon, size: 18),
+                    Icon(icon, size: 20),
                     const SizedBox(width: 8),
                   ],
-                  Text(
-                    text,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w500,
-                      fontSize: 14,
+                  Flexible(
+                    child: Text(
+                      text,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
                     ),
                   ),
                 ],

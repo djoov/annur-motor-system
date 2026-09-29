@@ -22,11 +22,7 @@ class ExportService {
     // 1. Prepare Data
     List<List<dynamic>> allRows = [];
     if (headers != null) {
-      final updatedHeaders = List<String>.from(headers);
-      if (!updatedHeaders.contains('description')) {
-        updatedHeaders.add('description');
-      }
-      allRows.add(updatedHeaders);
+      allRows.add(List<String>.from(headers));
     }
     allRows.addAll(data);
 
