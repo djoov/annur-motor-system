@@ -163,7 +163,7 @@ class _ItemsListScreenState extends State<ItemsListScreen> {
       // Keep the button above HomeScreen's floating nav when shown as a tab.
       padding: EdgeInsets.only(
         bottom: isTab && !DesktopScaffold.isDesktop
-            ? BottomNavMetrics.height + 8
+            ? BottomNavMetrics.fabLift(context)
             : 0,
       ),
       child: FloatingActionButton.extended(

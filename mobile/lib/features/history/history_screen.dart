@@ -820,7 +820,9 @@ class _TransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = transaction;
-    final itemCount = t.items.fold<int>(0, (s, i) => s + i.quantity);
+    // Return transactions store negative quantities; show a plain count.
+    final itemCount = t.items.fold<int>(0, (s, i) => s + i.quantity).abs();
+    final profit = t.totalProfit;
 
     return Material(
       color: selected ? AppColors.primarySoft : AppColors.surface,
@@ -878,11 +880,15 @@ class _TransactionTile extends StatelessWidget {
                       children: [
                         _TypeBadge(transaction: t),
                         const SizedBox(width: 8),
-                        Text(
-                          "$itemCount barang",
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.mutedForeground,
+                        Flexible(
+                          child: Text(
+                            "$itemCount barang",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
                         ),
                       ],
@@ -905,10 +911,15 @@ class _TransactionTile extends StatelessWidget {
                   if (showProfit) ...[
                     const SizedBox(height: 2),
                     Text(
-                      "+${_rupiah.format(t.totalProfit)}",
-                      style: const TextStyle(
+                      // A return reduces profit: "−Rp 3.500", not "+-Rp 3.500"
+                      profit < 0
+                          ? "−${_rupiah.format(-profit)}"
+                          : "+${_rupiah.format(profit)}",
+                      style: TextStyle(
                         fontSize: 13,
-                        color: AppColors.successStrong,
+                        color: profit < 0
+                            ? AppColors.destructiveStrong
+                            : AppColors.successStrong,
                         fontWeight: FontWeight.w600,
                         fontFeatures: _tabular,
                       ),

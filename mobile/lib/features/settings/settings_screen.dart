@@ -85,10 +85,12 @@ class _SettingsScreenState extends State<SettingsScreen>
         automaticallyImplyLeading: false,
         bottom: TabBar(
           controller: _tabController,
+          // Labels shrink instead of clipping on 320dp phones.
+          labelPadding: const EdgeInsets.symmetric(horizontal: 8),
           tabs: const [
-            Tab(text: "Printer"),
-            Tab(text: "Toko & Struk"),
-            Tab(text: "Akun"),
+            Tab(child: FittedBox(child: Text("Printer"))),
+            Tab(child: FittedBox(child: Text("Toko & Struk"))),
+            Tab(child: FittedBox(child: Text("Akun"))),
           ],
         ),
       ),

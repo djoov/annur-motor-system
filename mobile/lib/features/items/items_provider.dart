@@ -110,6 +110,30 @@ class ItemsProvider extends ChangeNotifier {
     }
   }
 
+  /// Turns a save failure into a message the cashier can act on, instead of a
+  /// generic "gagal disimpan" (which hid duplicate codes and rule denials).
+  Exception _saveError(Object e) {
+    if (e is DuplicateItemException) return e;
+    if (e is FirebaseException) {
+      switch (e.code) {
+        case 'permission-denied':
+          return Exception(
+            "Akun ini tidak diizinkan menyimpan barang. Minta pemilik toko "
+            "memastikan akses akun Anda Admin atau Staff di Kelola Pengguna.",
+          );
+        case 'unavailable':
+        case 'deadline-exceeded':
+          return Exception(
+            "Tidak tersambung ke server. Periksa internet lalu coba lagi.",
+          );
+        case 'not-found':
+          return Exception("Barang ini sudah dihapus dari daftar.");
+      }
+      return Exception("Barang gagal disimpan (${e.code}). Coba lagi.");
+    }
+    return Exception("Barang gagal disimpan. Coba lagi.");
+  }
+
   Future<bool> addItem(
     String name,
     String code,
@@ -153,7 +177,7 @@ class ItemsProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       print("Error adding item: $e");
-      return false;
+      throw _saveError(e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -222,7 +246,7 @@ class ItemsProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       print("Error updating item: $e");
-      return false;
+      throw _saveError(e);
     } finally {
       _isLoading = false;
       notifyListeners();

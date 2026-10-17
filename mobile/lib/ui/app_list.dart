@@ -135,9 +135,12 @@ class AppListPanelSliver extends StatelessWidget {
     this.dividerIndent = 16,
   });
 
+  /// Rows stop growing past this width and the panel centers (tablets).
+  static const double maxWidth = 760;
+
   @override
   Widget build(BuildContext context) {
-    return DecoratedSliver(
+    final panel = DecoratedSliver(
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
@@ -149,6 +152,17 @@ class AppListPanelSliver extends StatelessWidget {
             Divider(indent: dividerIndent, endIndent: 16),
         itemBuilder: itemBuilder,
       ),
+    );
+
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        final extra = constraints.crossAxisExtent - maxWidth;
+        if (extra <= 0) return panel;
+        return SliverPadding(
+          padding: EdgeInsets.symmetric(horizontal: extra / 2),
+          sliver: panel,
+        );
+      },
     );
   }
 }

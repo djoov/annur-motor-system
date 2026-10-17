@@ -86,7 +86,6 @@ class _PosScreenState extends State<PosScreen> {
     final content = LayoutBuilder(
       builder: (context, constraints) {
         final isTablet = constraints.maxWidth > 800;
-        final isDesktop = constraints.maxWidth > 1200;
         final showCartBar = !isTablet && posProvider.cart.isNotEmpty;
         final navTop = BottomNavMetrics.top(context);
 
@@ -125,8 +124,6 @@ class _PosScreenState extends State<PosScreen> {
                             Expanded(
                               child: _buildItemGrid(
                                 posProvider,
-                                crossAxisCount:
-                                    isDesktop ? 5 : (isTablet ? 4 : 2),
                                 bottomPadding: isTablet
                                     ? 24
                                     : navTop + (showCartBar ? 84 : 16),
@@ -269,7 +266,6 @@ class _PosScreenState extends State<PosScreen> {
 
   Widget _buildItemGrid(
     PosProvider provider, {
-    required int crossAxisCount,
     required double bottomPadding,
   }) {
     if (provider.isLoading && provider.filteredItems.isEmpty) {
@@ -324,8 +320,10 @@ class _PosScreenState extends State<PosScreen> {
 
     return GridView.builder(
       padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
+      // Columns follow the space actually left for products (the tablet cart
+      // panel takes 340–400dp): 2 on phones, 3 on 7" tablets, 4+ when wider.
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 210,
         mainAxisExtent: 236,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,

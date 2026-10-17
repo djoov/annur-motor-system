@@ -35,6 +35,10 @@ import '../auth/users_list_screen.dart';
 
 const _tabular = [FontFeature.tabularFigures()];
 
+/// Beranda content width on phones/portrait tablets, and in the side-rail layout.
+const double _berandaMaxWidth = 720;
+const double _berandaWideMaxWidth = 1120;
+
 final _rupiah = NumberFormat.currency(
   locale: 'id_ID',
   symbol: 'Rp ',
@@ -82,20 +86,33 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
-        body: Stack(
-          children: [
-            _buildBody(),
-            Positioned(
-              bottom: BottomNavMetrics.bottomOffset(context),
-              left: 16,
-              right: 16,
-              child: _BottomNav(
-                selectedIndex: _selectedIndex,
-                onSelect: _selectTab,
+        body: BottomNavMetrics.usesRail(context)
+            // Landscape tablets / wide windows: navigation on the side so
+            // nothing at the bottom (e.g. the Kasir pay panel) is covered.
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _SideRail(
+                    selectedIndex: _selectedIndex,
+                    onSelect: _selectTab,
+                  ),
+                  Expanded(child: _buildBody()),
+                ],
+              )
+            : Stack(
+                children: [
+                  _buildBody(),
+                  Positioned(
+                    bottom: BottomNavMetrics.bottomOffset(context),
+                    left: 16,
+                    right: 16,
+                    child: _BottomNav(
+                      selectedIndex: _selectedIndex,
+                      onSelect: _selectTab,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -139,55 +156,95 @@ class _BerandaContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final isAdmin = context.watch<AuthProvider>().isAdmin;
 
+    final rail = BottomNavMetrics.usesRail(context);
+
+    final quickActions = _QuickActions(
+      isAdmin: isAdmin,
+      onOpen: onOpen,
+      onShowAllMenu: () => _showAllMenu(context),
+    );
+    final attention = _AttentionSection(isAdmin: isAdmin, onOpen: onOpen);
+    final recent = _RecentTransactions(onSeeAll: () => onSelectTab(3));
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: RefreshIndicator(
-        color: AppColors.primary,
-        onRefresh: () async {
-          onRefresh();
-          await Future.delayed(const Duration(milliseconds: 600));
-        },
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _SalesHeader(
-                        isAdmin: isAdmin,
-                        onOpenProfile: () => onOpen(const ProfileScreen()),
+      // Rail layout keeps the status bar over light surfaces (dark icons);
+      // phones run the navy header under it (light icons).
+      value: rail ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light,
+      child: SafeArea(
+        top: rail,
+        bottom: false,
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: () async {
+            onRefresh();
+            await Future.delayed(const Duration(milliseconds: 600));
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              if (!rail)
+                SliverToBoxAdapter(
+                  child: _SalesHeader(
+                    isAdmin: isAdmin,
+                    onOpenProfile: () => onOpen(const ProfileScreen()),
+                  ),
+                ),
+              SliverToBoxAdapter(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: rail ? _berandaWideMaxWidth : _berandaMaxWidth,
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        rail ? 24 : 16,
+                        rail ? 16 : 20,
+                        rail ? 24 : 16,
+                        0,
                       ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _QuickActions(
-                              isAdmin: isAdmin,
-                              onOpen: onOpen,
-                              onShowAllMenu: () => _showAllMenu(context),
-                            ),
-                            const SizedBox(height: 28),
-                            _AttentionSection(isAdmin: isAdmin, onOpen: onOpen),
-                            const SizedBox(height: 28),
-                            _RecentTransactions(
-                              onSeeAll: () => onSelectTab(3),
-                            ),
-                            // Space for the floating bottom nav
-                            const SizedBox(height: 128),
-                          ],
-                        ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final twoColumns = constraints.maxWidth >= 900;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (rail) ...[
+                                _SalesHeader(
+                                  isAdmin: isAdmin,
+                                  fullBleed: false,
+                                  onOpenProfile: () =>
+                                      onOpen(const ProfileScreen()),
+                                ),
+                                const SizedBox(height: 24),
+                              ],
+                              quickActions,
+                              const SizedBox(height: 28),
+                              if (twoColumns)
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(child: attention),
+                                    const SizedBox(width: 24),
+                                    Expanded(child: recent),
+                                  ],
+                                )
+                              else ...[
+                                attention,
+                                const SizedBox(height: 28),
+                                recent,
+                              ],
+                              // Space for the floating bottom nav
+                              SizedBox(height: BottomNavMetrics.top(context) + 40),
+                            ],
+                          );
+                        },
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -353,7 +410,15 @@ class _SalesHeader extends StatelessWidget {
   final bool isAdmin;
   final VoidCallback onOpenProfile;
 
-  const _SalesHeader({required this.isAdmin, required this.onOpenProfile});
+  /// true: navy fills the screen width and runs under the status bar (phones,
+  /// portrait tablets). false: rounded navy card (side-rail layout).
+  final bool fullBleed;
+
+  const _SalesHeader({
+    required this.isAdmin,
+    required this.onOpenProfile,
+    this.fullBleed = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -377,11 +442,22 @@ class _SalesHeader extends StatelessWidget {
 
     final isFirstLoad = dashboard.isLoading && dashboard.transactionCount == 0;
 
+    // Full-bleed: keep the text in the same 720dp column as the content below.
+    final side = fullBleed
+        ? ((MediaQuery.sizeOf(context).width - _berandaMaxWidth) / 2)
+            .clamp(0.0, double.infinity)
+        : 0.0;
+
     return Container(
-      padding: EdgeInsets.fromLTRB(20, topInset + 16, 12, 28),
-      decoration: const BoxDecoration(
+      width: double.infinity,
+      padding: fullBleed
+          ? EdgeInsets.fromLTRB(20 + side, topInset + 16, 12 + side, 28)
+          : const EdgeInsets.fromLTRB(24, 20, 16, 24),
+      decoration: BoxDecoration(
         color: AppColors.brandNavy,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+        borderRadius: fullBleed
+            ? const BorderRadius.vertical(bottom: Radius.circular(24))
+            : BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -632,8 +708,16 @@ class _AttentionSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionTitle("Perlu perhatian"),
-        const SizedBox(height: 12),
+        // Same 48dp title row as "Transaksi terakhir" so the two line up
+        // when shown side by side on tablets.
+        const SizedBox(
+          height: 48,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: _SectionTitle("Perlu perhatian"),
+          ),
+        ),
+        const SizedBox(height: 4),
         _Panel(
           children: rows.isNotEmpty
               ? rows
@@ -790,7 +874,7 @@ class _RecentTransactions extends StatelessWidget {
             ),
             SizedBox(height: 4),
             Text(
-              "Tekan tombol Kasir di bawah untuk mulai berjualan.",
+              "Buka Kasir untuk mulai berjualan.",
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: AppColors.mutedForeground),
             ),
@@ -1219,6 +1303,156 @@ class _KasirNavItem extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// SIDE RAIL (landscape tablets / wide windows)
+// ===========================================================================
+
+class _SideRail extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onSelect;
+
+  const _SideRail({required this.selectedIndex, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 96,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(right: BorderSide(color: AppColors.border)),
+      ),
+      child: SafeArea(
+        right: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.asset(
+                  'assets/logo_app_new.png',
+                  width: 48,
+                  height: 48,
+                ),
+              ),
+              const SizedBox(height: 24),
+              _RailItem(
+                icon: LucideIcons.house,
+                label: "Beranda",
+                selected: selectedIndex == 0,
+                onTap: () => onSelect(0),
+              ),
+              _RailItem(
+                icon: LucideIcons.package,
+                label: "Produk",
+                selected: selectedIndex == 1,
+                onTap: () => onSelect(1),
+              ),
+              _RailItem(
+                icon: LucideIcons.shoppingCart,
+                label: "Kasir",
+                selected: selectedIndex == 2,
+                isKasir: true,
+                onTap: () => onSelect(2),
+              ),
+              _RailItem(
+                icon: LucideIcons.history,
+                label: "Riwayat",
+                selected: selectedIndex == 3,
+                onTap: () => onSelect(3),
+              ),
+              _RailItem(
+                icon: LucideIcons.settings,
+                label: "Setelan",
+                selected: selectedIndex == 4,
+                onTap: () => onSelect(4),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RailItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool isKasir;
+  final VoidCallback onTap;
+
+  const _RailItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.isKasir = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.primary : AppColors.mutedForeground;
+
+    final iconBox = isKasir
+        // The primary action keeps its logo navy + yellow identity.
+        ? Container(
+            width: 52,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.brandNavy,
+              borderRadius: BorderRadius.circular(14),
+              border: selected
+                  ? Border.all(color: AppColors.brandYellow, width: 2)
+                  : null,
+            ),
+            child: Icon(icon, size: 22, color: AppColors.brandYellow),
+          )
+        : AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: 56,
+            height: 36,
+            decoration: BoxDecoration(
+              color: selected ? AppColors.accentSoft : Colors.transparent,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(icon, size: 22, color: color),
+          );
+
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          width: 80,
+          height: 76,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              iconBox,
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: selected || isKasir
+                      ? FontWeight.w700
+                      : FontWeight.w500,
+                  color: isKasir && !selected ? AppColors.foreground : color,
+                ),
+              ),
+            ],
           ),
         ),
       ),
