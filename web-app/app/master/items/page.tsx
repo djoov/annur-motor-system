@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Edit, Trash2, Search, Package, UploadCloud, X, QrCode, Store, Warehouse, AlertTriangle, Eye, Download, Tag, FileSpreadsheet } from "lucide-react"
+import { Plus, Edit, Trash2, Search, Package, UploadCloud, X, QrCode, Store, AlertTriangle, Eye, Download, Tag, FileSpreadsheet } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { db } from "@/lib/firebase"
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, limit } from "firebase/firestore"
@@ -26,6 +26,7 @@ import { QRCodeCanvas } from "qrcode.react"
 import { Badge } from "@/components/ui/badge"
 
 import type { Item, Category } from "@/types"
+import { itemStock } from "@/lib/shop-data"
 
 // --- Helper Functions ---
 async function getUniqueItemCode(initialCode: string): Promise<string> {
@@ -82,8 +83,7 @@ export default function ItemsPage() {
     category: "",
     buyPrice: "",
     sellPrice: "",
-    stockDisplay: "",   // Gudang Toko
-    stockWarehouse: "", // Gudang Utama
+    stockDisplay: "",
     minStock: "",
     barcode: "",
     tags: "" // Comma-separated input
@@ -107,9 +107,11 @@ export default function ItemsPage() {
           ...data,
           id: doc.id,
           // Ensure new fields are mapped correctly for legacy data
-          stock: data.stock || 0,
-          stockDisplay: data.qty_display || data.stockDisplay || data.stock || 0,
-          stockWarehouse: data.qty_warehouse || data.stockWarehouse || 0
+          // `stock` is the number the mobile app sells from; `stockDisplay`
+          // can be stale because only the old web code kept it updated.
+          stock: itemStock(data),
+          stockDisplay: itemStock(data),
+          stockWarehouse: 0 // stock is a single number now (no warehouse)
         } as Item
       })
 
@@ -150,17 +152,33 @@ export default function ItemsPage() {
         toast({ title: "File harus berupa gambar", variant: "destructive" })
         return
       }
-      if (file.size > 1024 * 1024) { // Increased limit to 1MB
-        toast({ title: "Ukuran file terlalu besar", description: "Maksimal 1MB.", variant: "destructive" })
-        return
+      // The image is stored inside the item document (1 MB limit) and every
+      // catalog visitor downloads it, so shrink it to a small JPEG first.
+      const url = URL.createObjectURL(file)
+      const img = new window.Image()
+      img.onload = () => {
+        const MAX_SIZE = 600
+        const scale = Math.min(1, MAX_SIZE / Math.max(img.width, img.height))
+        const canvas = document.createElement("canvas")
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
+        const ctx = canvas.getContext("2d")
+        if (!ctx) {
+          URL.revokeObjectURL(url)
+          toast({ title: "Gagal memproses gambar", variant: "destructive" })
+          return
+        }
+        ctx.fillStyle = "#ffffff"
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        URL.revokeObjectURL(url)
+        setImageBase64(canvas.toDataURL("image/jpeg", 0.8))
       }
-      const reader = new FileReader()
-      reader.onloadend = () => { setImageBase64(reader.result as string) }
-      reader.onerror = (err) => {
-        console.error("File reading error:", err);
-        toast({ title: "Gagal membaca file", variant: "destructive" });
+      img.onerror = () => {
+        URL.revokeObjectURL(url)
+        toast({ title: "Gagal membaca file", variant: "destructive" })
       }
-      reader.readAsDataURL(file)
+      img.src = url
     }
   }
 
@@ -168,7 +186,7 @@ export default function ItemsPage() {
     setFormData({
       code: "", name: "", description: "", category: "",
       buyPrice: "", sellPrice: "",
-      stockDisplay: "", stockWarehouse: "",
+      stockDisplay: "",
       minStock: "", barcode: "", tags: ""
     })
     setTagsList([])
@@ -209,10 +227,7 @@ export default function ItemsPage() {
         }
       }
 
-      // Calculate total stock (Legacy support)
       const qtyDisplay = Number(formData.stockDisplay) || 0;
-      const qtyWarehouse = Number(formData.stockWarehouse) || 0;
-      const totalStock = qtyDisplay + qtyWarehouse;
 
       const itemData: any = {
         code: finalCode,
@@ -224,16 +239,16 @@ export default function ItemsPage() {
         minStock: Number(formData.minStock),
         barcode: formData.barcode,
         imageUrl: imageBase64 || editingItem?.imageUrl || '',
+        tags: tagsList, // Save tags array
+        updatedAt: serverTimestamp()
+      }
 
-        // Synced Data Model Fields
-        qty_display: qtyDisplay,
-        qty_warehouse: qtyWarehouse,
-        stock: qtyDisplay, // Legacy field matches Shop Stock (Mobile Logic)
-
-        // Also save text fields for easier querying if needed
-        stockDisplay: qtyDisplay,
-        stockWarehouse: qtyWarehouse,
-        tags: tagsList // Save tags array
+      // Only write stock when it was changed in the form: phones keep selling
+      // while this form is open, and an unchanged old number would undo those sales.
+      if (!editingItem || qtyDisplay !== (editingItem.stockDisplay ?? 0)) {
+        itemData.stock = qtyDisplay;
+        itemData.qty_display = qtyDisplay;
+        itemData.stockDisplay = qtyDisplay;
       }
 
       if (editingItem) {
@@ -262,7 +277,6 @@ export default function ItemsPage() {
     setEditingItem(item)
     // Map existing data to form, handling potential missing new fields
     const displayStock = item.stockDisplay ?? item.stock ?? 0;
-    const warehouseStock = item.stockWarehouse ?? 0;
 
     setFormData({
       code: item.code || '',
@@ -272,7 +286,6 @@ export default function ItemsPage() {
       buyPrice: (item.buyPrice || 0).toString(),
       sellPrice: (item.sellPrice || 0).toString(),
       stockDisplay: displayStock.toString(),
-      stockWarehouse: warehouseStock.toString(),
       minStock: (item.minStock || 0).toString(),
       barcode: item.barcode || '',
       tags: (item.tags || []).join(', ')
@@ -304,7 +317,7 @@ export default function ItemsPage() {
     // CSV header
     const headers = [
       'Kode', 'Nama', 'Kategori', 'Harga Beli', 'Harga Jual', 'Keuntungan',
-      'Stok Toko', 'Stok Gudang', 'Total Stok', 'Min Stok', 'Barcode', 'Tags', 'Deskripsi'
+      'Stok', 'Min Stok', 'Barcode', 'Tags', 'Deskripsi'
     ];
 
     // CSV rows
@@ -312,8 +325,6 @@ export default function ItemsPage() {
       const buyPrice = item.buyPrice || 0;
       const sellPrice = item.sellPrice || 0;
       const profit = sellPrice - buyPrice;
-      const totalStock = (item.stockDisplay || 0) + (item.stockWarehouse || 0);
-
       return [
         item.code || '',
         item.name || '',
@@ -321,9 +332,7 @@ export default function ItemsPage() {
         buyPrice,
         sellPrice,
         profit,
-        item.stockDisplay || 0,
-        item.stockWarehouse || 0,
-        totalStock,
+        item.stock || 0,
         item.minStock || 0,
         item.barcode || '',
         (item.tags || []).join('; '),
@@ -352,7 +361,7 @@ export default function ItemsPage() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold text-slate-900">Master Data Barang</h1>
-              <p className="text-slate-500">Kelola inventaris, harga, dan stok multi-gudang.</p>
+              <p className="text-slate-500">Kelola inventaris, harga, dan stok.</p>
             </div>
             <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
               <DialogTrigger asChild>
@@ -491,23 +500,15 @@ export default function ItemsPage() {
                         )}
                       </div>
 
-                      {/* Multi Warehouse Stock Inputs */}
-                      <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
+                      {/* Stock Input */}
+                      <div className="p-4 bg-blue-50/50 rounded-lg border border-blue-100">
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
                             <Store className="w-4 h-4 text-blue-600" />
-                            <Label htmlFor="stockDisplay">Stok Toko (Display)</Label>
+                            <Label htmlFor="stockDisplay">Stok</Label>
                           </div>
                           <Input id="stockDisplay" type="number" min={0} className="bg-white border-blue-200" value={formData.stockDisplay} onChange={(e) => setFormData(p => ({ ...p, stockDisplay: e.target.value }))} placeholder="0" />
-                          <p className="text-[10px] text-slate-500">Barang di rak depan/etalase.</p>
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Warehouse className="w-4 h-4 text-orange-600" />
-                            <Label htmlFor="stockWarehouse">Stok Gudang (Utama)</Label>
-                          </div>
-                          <Input id="stockWarehouse" type="number" min={0} className="bg-white border-orange-200" value={formData.stockWarehouse} onChange={(e) => setFormData(p => ({ ...p, stockWarehouse: e.target.value }))} placeholder="0" />
-                          <p className="text-[10px] text-slate-500">Stok penyimpanan belakang.</p>
+                          <p className="text-[10px] text-slate-500">Stok yang dipakai kasir di aplikasi HP.</p>
                         </div>
                       </div>
 
@@ -607,10 +608,7 @@ export default function ItemsPage() {
                       <th className="px-6 py-4 text-left">Kategori</th>
                       <th className="px-6 py-4 text-right">Harga</th>
                       <th className="px-6 py-4 text-center w-32">
-                        <div className="flex flex-col">
-                          <span>Stok Total</span>
-                          <span className="text-[10px] lowercase font-normal">(Toko + Gudang)</span>
-                        </div>
+                        Stok
                       </th>
                       <th className="px-6 py-4 text-center w-24">Aksi</th>
                     </tr>
@@ -621,7 +619,7 @@ export default function ItemsPage() {
                     ) : filteredItems.length === 0 ? (
                       <tr><td colSpan={6} className="text-center p-8 text-slate-400">Tidak ada barang yang ditemukan.</td></tr>
                     ) : sortedItems.map((item) => {
-                      const totalStock = (item.stockDisplay || 0) + (item.stockWarehouse || 0);
+                      const totalStock = item.stock || 0;
                       const isLowStock = totalStock <= (item.minStock || 5);
 
                       return (
@@ -650,9 +648,6 @@ export default function ItemsPage() {
                           <td className="px-6 py-3 text-center">
                             <div className={`inline-flex flex-col items-center justify-center px-3 py-1 rounded-md border ${isLowStock ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50/50 border-green-100 text-slate-700'}`}>
                               <span className="font-bold">{totalStock}</span>
-                              <span className="text-[10px] opacity-70">
-                                {item.stockDisplay || 0} + {item.stockWarehouse || 0}
-                              </span>
                             </div>
                             {isLowStock && (
                               <div className="mt-1 flex items-center justify-center text-[10px] text-red-500 font-medium">
@@ -696,7 +691,7 @@ export default function ItemsPage() {
             const sellPrice = selectedItem.sellPrice || 0;
             const profit = sellPrice - buyPrice;
             const profitPercent = buyPrice > 0 ? ((profit / buyPrice) * 100).toFixed(1) : '0';
-            const totalStock = (selectedItem.stockDisplay || 0) + (selectedItem.stockWarehouse || 0);
+            const totalStock = selectedItem.stock || 0;
             const isLowStock = totalStock <= (selectedItem.minStock || 5);
 
             return (
@@ -804,20 +799,10 @@ export default function ItemsPage() {
                     </div>
 
                     {/* Stocks */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className={`p-3 rounded-lg border text-center ${isLowStock ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-100'}`}>
-                        <Store className="w-5 h-5 mx-auto text-blue-600 mb-1" />
-                        <p className="text-xs text-slate-500">Stok Toko</p>
-                        <p className="font-bold text-lg text-slate-800">{selectedItem.stockDisplay || 0}</p>
-                      </div>
-                      <div className="p-3 rounded-lg border bg-orange-50 border-orange-100 text-center">
-                        <Warehouse className="w-5 h-5 mx-auto text-orange-600 mb-1" />
-                        <p className="text-xs text-slate-500">Stok Gudang</p>
-                        <p className="font-bold text-lg text-slate-800">{selectedItem.stockWarehouse || 0}</p>
-                      </div>
+                    <div>
                       <div className={`p-3 rounded-lg border text-center ${isLowStock ? 'bg-red-100 border-red-300' : 'bg-emerald-50 border-emerald-100'}`}>
                         <Package className={`w-5 h-5 mx-auto mb-1 ${isLowStock ? 'text-red-600' : 'text-emerald-600'}`} />
-                        <p className="text-xs text-slate-500">Total</p>
+                        <p className="text-xs text-slate-500">Stok</p>
                         <p className={`font-bold text-lg ${isLowStock ? 'text-red-700' : 'text-emerald-700'}`}>{totalStock}</p>
                       </div>
                     </div>

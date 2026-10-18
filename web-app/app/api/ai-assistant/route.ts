@@ -13,30 +13,67 @@ ATURAN KETAT (CRITICAL RULES):
 5. Jangan berikan harga pasti, minta pengguna menghubungi bengkel untuk harga terbaru.
 `;
 
+// This endpoint is public (the /oli page), so cap what one visitor can spend.
+const MAX_MESSAGES = 10;          // only the latest turns are sent to Gemini
+const MAX_MESSAGE_CHARS = 500;
+const RATE_LIMIT = 10;            // requests per IP per window
+const RATE_WINDOW_MS = 10 * 60 * 1000;
+
+// Best effort: per server instance, resets on cold start.
+const hits = new Map<string, number[]>();
+
+function isRateLimited(ip: string): boolean {
+    const now = Date.now();
+    const recent = (hits.get(ip) || []).filter(t => now - t < RATE_WINDOW_MS);
+    if (recent.length >= RATE_LIMIT) {
+        hits.set(ip, recent);
+        return true;
+    }
+    recent.push(now);
+    hits.set(ip, recent);
+    if (hits.size > 5000) hits.clear();
+    return false;
+}
+
 export async function POST(req: Request) {
     try {
         const apiKey = process.env.GEMINI_API_KEY;
 
         if (!apiKey || apiKey === 'ISI_API_KEY_GEMINI_ANDA_DI_SINI') {
-            return NextResponse.json({ 
-                error: "GEMINI_API_KEY belum dikonfigurasi di file .env" 
+            return NextResponse.json({
+                error: "GEMINI_API_KEY belum dikonfigurasi di file .env"
             }, { status: 500 });
         }
 
-        const ai = new GoogleGenAI({ apiKey });
+        const ip = (req.headers.get('x-nf-client-connection-ip')
+            || req.headers.get('x-forwarded-for')?.split(',')[0]
+            || 'unknown').trim();
+        if (isRateLimited(ip)) {
+            return NextResponse.json({
+                error: "Terlalu banyak pertanyaan. Coba lagi beberapa menit lagi"
+            }, { status: 429 });
+        }
 
-        const body = await req.json();
-        const { messages } = body;
+        const body = await req.json().catch(() => null);
+        const messages = body?.messages;
 
-        if (!messages || !Array.isArray(messages)) {
+        if (!Array.isArray(messages) || messages.length === 0) {
             return NextResponse.json({ error: "Invalid messages array" }, { status: 400 });
         }
 
-        const contents = messages.map((msg: any) => ({
+        const recent = messages.slice(-MAX_MESSAGES);
+        if (recent.some((msg: any) => typeof msg?.content !== 'string' || msg.content.length > MAX_MESSAGE_CHARS)) {
+            return NextResponse.json({
+                error: `Pertanyaan terlalu panjang (maksimal ${MAX_MESSAGE_CHARS} karakter)`
+            }, { status: 400 });
+        }
+
+        const contents = recent.map((msg: any) => ({
             role: msg.role === 'user' ? 'user' : 'model',
             parts: [{ text: msg.content }]
         }));
 
+        const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: contents,
@@ -52,10 +89,10 @@ export async function POST(req: Request) {
         return NextResponse.json({ reply: replyText });
 
     } catch (error: any) {
+        // Details stay in the server log; visitors get a generic message.
         console.error("AI Assistant Error:", error);
-        return NextResponse.json({ 
-            error: "Gagal memproses: " + (error.message || "Unknown error")
+        return NextResponse.json({
+            error: "Gagal memproses pertanyaan"
         }, { status: 500 });
     }
 }
-

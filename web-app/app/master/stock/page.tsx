@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Package, AlertTriangle, CheckCircle, XCircle, Edit, ArrowRightLeft, History, RefreshCw } from "lucide-react"
 import { db } from "@/lib/firebase"
-import { collection, onSnapshot, doc, writeBatch, serverTimestamp } from "firebase/firestore"
+import { collection, onSnapshot, doc, runTransaction, serverTimestamp } from "firebase/firestore"
+import { itemStock } from "@/lib/shop-data"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
 
@@ -54,7 +55,7 @@ export default function StockPage() {
     useEffect(() => {
         setIsLoading(true);
         const unsubscribe = onSnapshot(collection(db, "items"), (snapshot) => {
-            const itemsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockItem))
+            const itemsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), stock: itemStock(doc.data()) } as StockItem))
                 .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
             setStockItems(itemsList);
             setIsLoading(false);
@@ -103,46 +104,49 @@ export default function StockPage() {
         setIsSaving(true);
 
         const quantityChange = adjustment.type === 'add' ? adjustment.quantity : -adjustment.quantity;
-        const newStock = (selectedItem.stock || 0) + quantityChange;
-
-        if (newStock < 0) {
-            toast({ title: "Stok tidak boleh kurang dari 0", variant: "destructive" });
-            setIsSaving(false);
-            return;
-        }
 
         try {
-            const batch = writeBatch(db);
             const itemRef = doc(db, "items", selectedItem.id);
-
-            // 1. Update Stock
-            batch.update(itemRef, {
-                stock: newStock,
-                qty_display: newStock // Sync with Mobile (Shop Stock)
-            });
-
-            // 2. Log Movement
             const logRef = doc(collection(db, "itemMovements"));
-            batch.set(logRef, {
-                itemId: selectedItem.id,
-                itemName: selectedItem.name,
-                itemCode: selectedItem.code,
-                transactionType: adjustment.type === 'add' ? 'adjustment_in' : 'adjustment_out',
-                reason: adjustment.reason,
-                quantity: Math.abs(quantityChange),
-                previousStock: selectedItem.stock,
-                newStock: newStock,
-                userId: user.id,
-                userName: user.name,
-                timestamp: serverTimestamp()
+
+            // Apply the change to the current server stock (phones may have sold
+            // since this page loaded), same as the mobile app's stock writes.
+            await runTransaction(db, async (tx) => {
+                const snap = await tx.get(itemRef);
+                if (!snap.exists()) throw new Error("Barang tidak ditemukan.");
+                const previousStock = itemStock(snap.data());
+                const newStock = previousStock + quantityChange;
+                if (newStock < 0) throw new Error(`Stok tidak boleh kurang dari 0 (stok sekarang ${previousStock}).`);
+
+                // 1. Update Stock
+                tx.update(itemRef, {
+                    stock: newStock,
+                    qty_display: newStock, // Sync with Mobile
+                    updatedAt: serverTimestamp()
+                });
+
+                // 2. Log Movement
+                tx.set(logRef, {
+                    itemId: selectedItem.id,
+                    itemName: selectedItem.name,
+                    itemCode: selectedItem.code,
+                    transactionType: adjustment.type === 'add' ? 'adjustment_in' : 'adjustment_out',
+                    reason: adjustment.reason,
+                    quantity: Math.abs(quantityChange),
+                    previousStock,
+                    newStock,
+                    userId: user.id,
+                    userName: user.name,
+                    timestamp: serverTimestamp()
+                });
             });
 
-            await batch.commit();
             toast({ title: "Stok berhasil diperbarui" });
             setIsAdjustDialogOpen(false);
         } catch (error) {
             console.error(error);
-            toast({ title: "Gagal memperbarui stok", variant: "destructive" });
+            const message = error instanceof Error ? error.message : undefined;
+            toast({ title: "Gagal memperbarui stok", description: message, variant: "destructive" });
         } finally {
             setIsSaving(false);
         }

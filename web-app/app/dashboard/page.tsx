@@ -8,6 +8,7 @@ import { TrendingUp, Package, DollarSign, ShoppingCart, AlertTriangle, ArrowUpRi
 import { db } from "@/lib/firebase"
 import { collection, query, where, getDocs, Timestamp, orderBy, limit } from "firebase/firestore"
 import { Badge } from "@/components/ui/badge"
+import { itemStock, localDateKey, toDate } from "@/lib/shop-data"
 
 // --- Interface Data ---
 interface DashboardStats {
@@ -32,8 +33,6 @@ interface CategoryChartData {
 interface LowStockItem {
   name: string;
   stockTotal: number;
-  stockDisplay: number;
-  stockWarehouse: number;
   minStock: number;
   unit: string;
 }
@@ -54,107 +53,102 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       setIsLoading(true);
+      try {
+        // --- 1. Ambil data Transaksi (7 hari terakhir, termasuk hari ini) ---
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const sevenDaysAgo = new Date(todayStart);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
 
-      // --- 1. Ambil data Transaksi (7 Hari Terakhir) ---
-      const today = new Date();
-      const todayStart = new Date(today.setHours(0, 0, 0, 0));
-      const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const transactionsQuery = query(
+          collection(db, "transactions"),
+          where("transactionDate", ">=", Timestamp.fromDate(sevenDaysAgo))
+        );
+        const transactionsSnapshot = await getDocs(transactionsQuery);
 
-      const transactionsQuery = query(
-        collection(db, "transactions"),
-        where("transactionDate", ">=", Timestamp.fromDate(sevenDaysAgo))
-      );
-      const transactionsSnapshot = await getDocs(transactionsQuery);
+        let todaySales = 0;
+        let todayProfit = 0;
+        const dailySales: { [key: string]: { sales: number, profit: number } } = {};
+        const categorySales: { [key: string]: number } = {};
 
-      let todaySales = 0;
-      let todayProfit = 0;
-      const dailySales: { [key: string]: { sales: number, profit: number } } = {};
-      const categorySales: { [key: string]: number } = {};
+        transactionsSnapshot.forEach(doc => {
+          const trx = doc.data();
+          const trxDate = toDate(trx.transactionDate) || new Date();
 
-      transactionsSnapshot.forEach(doc => {
-        const trx = doc.data();
-        // Handle Firestore Timestamp properly
-        let trxDate = new Date();
-        if (trx.transactionDate instanceof Timestamp) {
-          trxDate = trx.transactionDate.toDate();
-        } else if (trx.transactionDate) {
-          trxDate = new Date(trx.transactionDate);
-        }
+          // Statistik Hari Ini
+          if (trxDate >= todayStart) {
+            todaySales += trx.totalAmount || 0;
+            todayProfit += trx.totalProfit || 0;
+          }
 
-        // Statistik Hari Ini
-        if (trxDate >= todayStart) {
-          todaySales += trx.totalAmount || 0;
-          todayProfit += trx.totalProfit || 0;
-        }
+          // Grafik Penjualan 7 Hari
+          const dateString = localDateKey(trxDate);
+          if (!dailySales[dateString]) {
+            dailySales[dateString] = { sales: 0, profit: 0 };
+          }
+          dailySales[dateString].sales += trx.totalAmount || 0;
+          dailySales[dateString].profit += trx.totalProfit || 0;
 
-        // Grafik Penjualan 7 Hari
-        const dateString = trxDate.toISOString().split('T')[0];
-        if (!dailySales[dateString]) {
-          dailySales[dateString] = { sales: 0, profit: 0 };
-        }
-        dailySales[dateString].sales += trx.totalAmount || 0;
-        dailySales[dateString].profit += trx.totalProfit || 0;
-
-        // Grafik Kategori
-        (trx.items || []).forEach((item: any) => {
-          const category = item.category || 'Umum';
-          const itemRevenue = (item.sellPrice || 0) * (item.quantity || 0);
-          categorySales[category] = (categorySales[category] || 0) + itemRevenue;
-        });
-      });
-
-      // Format Data Grafik
-      const formattedSalesChart = Object.keys(dailySales).map(date => ({
-        date,
-        ...dailySales[date]
-      })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-      const formattedCategoryChart = Object.keys(categorySales).map(category => ({
-        category,
-        sales: categorySales[category]
-      })).sort((a, b) => b.sales - a.sales).slice(0, 5); // Top 5 Kategori
-
-      // --- 2. Ambil Data Barang (Inventaris) ---
-      const itemsSnapshot = await getDocs(collection(db, "items"));
-      const totalItems = itemsSnapshot.size;
-      const lowStockItemsList: LowStockItem[] = [];
-      let totalStockValue = 0;
-
-      itemsSnapshot.forEach(doc => {
-        const item = doc.data();
-
-        // Kalkulasi Stok Total (Gudang + Toko)
-        const stockDisplay = item.qty_display || item.stock || 0;
-        const stockWarehouse = item.qty_warehouse || 0;
-        const totalStock = stockDisplay + stockWarehouse;
-
-        // Nilai Aset (Harga Beli * Total Stok)
-        totalStockValue += (item.buyPrice || 0) * totalStock;
-
-        // Cek Stok Min (Hanya jika stok total di bawah batas)
-        if (totalStock <= (item.minStock || 5)) {
-          lowStockItemsList.push({
-            name: item.name,
-            stockTotal: totalStock,
-            stockDisplay: stockDisplay,
-            stockWarehouse: stockWarehouse,
-            minStock: item.minStock || 5,
-            unit: item.unit || 'pcs'
+          // Grafik Kategori
+          (trx.items || []).forEach((item: any) => {
+            const category = item.category || 'Umum';
+            const itemRevenue = (item.sellPrice || 0) * (item.quantity || 0);
+            categorySales[category] = (categorySales[category] || 0) + itemRevenue;
           });
-        }
-      });
+        });
 
-      setStats({
-        todaySales,
-        todayProfit,
-        totalItems,
-        lowStockItemsCount: lowStockItemsList.length,
-        totalStockValue
-      });
-      setSalesChartData(formattedSalesChart);
-      setCategoryChartData(formattedCategoryChart);
-      setLowStockItems(lowStockItemsList.sort((a, b) => a.stockTotal - b.stockTotal));
-      setIsLoading(false);
+        // Format Data Grafik
+        const formattedSalesChart = Object.keys(dailySales).map(date => ({
+          date,
+          ...dailySales[date]
+        })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        const formattedCategoryChart = Object.keys(categorySales).map(category => ({
+          category,
+          sales: categorySales[category]
+        })).sort((a, b) => b.sales - a.sales).slice(0, 5); // Top 5 Kategori
+
+        // --- 2. Ambil Data Barang (Inventaris) ---
+        const itemsSnapshot = await getDocs(collection(db, "items"));
+        const totalItems = itemsSnapshot.size;
+        const lowStockItemsList: LowStockItem[] = [];
+        let totalStockValue = 0;
+
+        itemsSnapshot.forEach(doc => {
+          const item = doc.data();
+
+          // Same single stock number as the mobile app
+          const totalStock = itemStock(item);
+
+          // Nilai Aset (Harga Beli * Total Stok)
+          totalStockValue += (item.buyPrice || 0) * totalStock;
+
+          // Cek Stok Min (Hanya jika stok total di bawah batas)
+          if (totalStock <= (item.minStock || 5)) {
+            lowStockItemsList.push({
+              name: item.name,
+              stockTotal: totalStock,
+              minStock: item.minStock || 5,
+              unit: item.unit || 'pcs'
+            });
+          }
+        });
+
+        setStats({
+          todaySales,
+          todayProfit,
+          totalItems,
+          lowStockItemsCount: lowStockItemsList.length,
+          totalStockValue
+        });
+        setSalesChartData(formattedSalesChart);
+        setCategoryChartData(formattedCategoryChart);
+        setLowStockItems(lowStockItemsList.sort((a, b) => a.stockTotal - b.stockTotal));
+      } catch (error) {
+        console.error("Gagal memuat dashboard:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     fetchDashboardData();
@@ -345,9 +339,7 @@ export default function DashboardPage() {
                 <thead className="bg-slate-50 text-slate-500 uppercase font-medium text-xs">
                   <tr>
                     <th className="px-6 py-4">Nama Barang</th>
-                    <th className="px-6 py-4 text-center">Total Stok</th>
-                    <th className="px-6 py-4 text-center">Gudang Toko</th>
-                    <th className="px-6 py-4 text-center">Gudang Utama</th>
+                    <th className="px-6 py-4 text-center">Stok</th>
                     <th className="px-6 py-4 text-center">Min. Stok</th>
                     <th className="px-6 py-4 text-center">Status</th>
                   </tr>
@@ -358,8 +350,6 @@ export default function DashboardPage() {
                       <tr key={index} className="hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4 font-medium text-slate-800">{item.name}</td>
                         <td className="px-6 py-4 text-center font-bold text-red-600">{item.stockTotal}</td>
-                        <td className="px-6 py-4 text-center text-slate-500">{item.stockDisplay}</td>
-                        <td className="px-6 py-4 text-center text-slate-500">{item.stockWarehouse}</td>
                         <td className="px-6 py-4 text-center text-slate-400">{item.minStock}</td>
                         <td className="px-6 py-4 text-center">
                           <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-200 border-none shadow-none">
@@ -370,7 +360,7 @@ export default function DashboardPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
                         <div className="flex flex-col items-center justify-center">
                           <Package className="w-12 h-12 mb-3 text-slate-200" />
                           <p>Semua stok aman terkendali.</p>

@@ -25,6 +25,7 @@ import {
 import { Store, Printer, Users, Plus, Edit, Trash2, Save, MapPin, Phone, Mail, CreditCard, UserCog, AlertTriangle, Database } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/components/auth-provider"
+import { itemStock } from "@/lib/shop-data"
 
 // --- Impor dari Firebase ---
 import { db } from "@/lib/firebase"
@@ -54,7 +55,7 @@ interface UserData {
   id: string
   name: string
   email: string
-  role: "admin" | "staff"
+  role: "admin" | "staff" | "pending"
   createdAt?: any
 }
 
@@ -72,13 +73,14 @@ export default function SettingsPage() {
   // State untuk dialog manajemen user
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserData | null>(null)
-  const [userForm, setUserForm] = useState({ name: '', email: '', role: 'staff' as 'admin' | 'staff' });
+  const [userForm, setUserForm] = useState({ name: '', email: '', role: 'staff' as UserData['role'] });
 
   // State untuk reset data
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetType, setResetType] = useState<'transactions' | 'debts' | 'all'>('transactions');
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [isResetting, setIsResetting] = useState(false);
+  const [isCleaningStock, setIsCleaningStock] = useState(false);
 
   // --- Realtime Data Fetching ---
   useEffect(() => {
@@ -152,15 +154,6 @@ export default function SettingsPage() {
           role: userForm.role,
         });
         toast({ title: 'Data pengguna diperbarui' });
-      } else {
-        await addDoc(collection(db, "users"), {
-          name: userForm.name,
-          email: userForm.email,
-          role: userForm.role,
-          createdAt: serverTimestamp(),
-          // Note: In a real app, you'd trigger a cloud function to create Auth user here
-        });
-        toast({ title: 'Pengguna baru ditambahkan' });
       }
       setIsUserDialogOpen(false);
     } catch (error) {
@@ -190,6 +183,41 @@ export default function SettingsPage() {
 
   const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
 
+  // Stock is a single number (`stock`) since the mobile app dropped the
+  // warehouse split. Clear the leftover warehouse numbers and the stale
+  // `stockDisplay` copy so no screen shows them again. `stock` is untouched.
+  const handleClearOldWarehouseStock = async () => {
+    if (!confirm("Nolkan stok gudang lama di semua barang? Stok utama (yang dipakai HP) tidak berubah.")) return;
+    setIsCleaningStock(true);
+    try {
+      const snapshot = await getDocs(collection(db, 'items'));
+      const targets = snapshot.docs.filter(d => {
+        const data = d.data();
+        return (Number(data.qty_warehouse) || 0) !== 0
+          || (Number(data.stockWarehouse) || 0) !== 0
+          || (data.stockDisplay !== undefined && Number(data.stockDisplay) !== itemStock(data));
+      });
+      for (let i = 0; i < targets.length; i += 400) {
+        const batch = writeBatch(db);
+        targets.slice(i, i + 400).forEach(d => batch.update(d.ref, {
+          qty_warehouse: 0,
+          stockWarehouse: 0,
+          stockDisplay: itemStock(d.data()),
+        }));
+        await batch.commit();
+      }
+      toast({
+        title: targets.length ? 'Stok gudang lama dibersihkan' : 'Sudah bersih',
+        description: `${targets.length} barang diperbarui.`
+      });
+    } catch (error) {
+      console.error('Clear warehouse stock error:', error);
+      toast({ title: 'Gagal membersihkan stok gudang', variant: 'destructive' });
+    } finally {
+      setIsCleaningStock(false);
+    }
+  };
+
   // Handler untuk reset data
   const handleResetData = async () => {
     if (resetConfirmText !== 'HAPUS SEMUA') {
@@ -199,14 +227,15 @@ export default function SettingsPage() {
 
     setIsResetting(true);
     try {
-      const batch = writeBatch(db);
+      // Firestore allows at most 500 writes per batch, so commit in chunks.
+      const ops: ((batch: ReturnType<typeof writeBatch>) => void)[] = [];
       let deletedCount = 0;
 
       // Reset Transactions
       if (resetType === 'transactions' || resetType === 'all') {
         const transactionsSnapshot = await getDocs(collection(db, 'transactions'));
         transactionsSnapshot.docs.forEach(doc => {
-          batch.delete(doc.ref);
+          ops.push(batch => batch.delete(doc.ref));
           deletedCount++;
         });
       }
@@ -215,14 +244,14 @@ export default function SettingsPage() {
       if (resetType === 'debts' || resetType === 'all') {
         const debtsSnapshot = await getDocs(collection(db, 'debts'));
         debtsSnapshot.docs.forEach(doc => {
-          batch.delete(doc.ref);
+          ops.push(batch => batch.delete(doc.ref));
           deletedCount++;
         });
 
-        // Also reset totalDebt on all customers
+        // Also reset the customers' debt totals (`debt` is the legacy field)
         const customersSnapshot = await getDocs(collection(db, 'customers'));
         customersSnapshot.docs.forEach(doc => {
-          batch.update(doc.ref, { totalDebt: 0 });
+          ops.push(batch => batch.update(doc.ref, { totalDebt: 0, debt: 0 }));
         });
       }
 
@@ -230,12 +259,16 @@ export default function SettingsPage() {
       if (resetType === 'all') {
         const movementsSnapshot = await getDocs(collection(db, 'itemMovements'));
         movementsSnapshot.docs.forEach(doc => {
-          batch.delete(doc.ref);
+          ops.push(batch => batch.delete(doc.ref));
           deletedCount++;
         });
       }
 
-      await batch.commit();
+      for (let i = 0; i < ops.length; i += 400) {
+        const batch = writeBatch(db);
+        ops.slice(i, i + 400).forEach(op => op(batch));
+        await batch.commit();
+      }
 
       toast({
         title: 'Data Berhasil Dihapus',
@@ -374,11 +407,10 @@ export default function SettingsPage() {
                   <CardTitle className="flex items-center gap-2">
                     <UserCog className="w-5 h-5 text-indigo-600" /> Akses Pengguna
                   </CardTitle>
-                  <CardDescription>Kelola tim dan hak akses aplikasi.</CardDescription>
+                  <CardDescription>
+                    Pengguna baru mendaftar sendiri di aplikasi (status &quot;pending&quot;), lalu ubah hak aksesnya di sini.
+                  </CardDescription>
                 </div>
-                <Button onClick={() => { setEditingUser(null); setUserForm({ name: '', email: '', role: 'staff' }); setIsUserDialogOpen(true); }}>
-                  <Plus className="mr-2 h-4 w-4" /> Tambah User
-                </Button>
               </CardHeader>
               <CardContent>
                 <div className="overflow-hidden rounded-lg border border-slate-200">
@@ -443,6 +475,17 @@ export default function SettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Clear old warehouse stock (one-time cleanup) */}
+                <div className="p-4 bg-white rounded-lg border border-red-200 flex justify-between items-center gap-4">
+                  <div>
+                    <h4 className="font-medium text-slate-800">Nolkan Stok Gudang Lama</h4>
+                    <p className="text-sm text-slate-500">Hapus angka stok gudang sisa sistem lama. Stok yang dipakai aplikasi HP tidak berubah.</p>
+                  </div>
+                  <Button variant="outline" className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700" disabled={isCleaningStock} onClick={handleClearOldWarehouseStock}>
+                    <Database className="w-4 h-4 mr-2" /> {isCleaningStock ? 'Memproses...' : 'Nolkan'}
+                  </Button>
+                </div>
+
                 {/* Reset Transactions */}
                 <div className="p-4 bg-white rounded-lg border border-red-200 flex justify-between items-center">
                   <div>
@@ -500,13 +543,14 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="userRole">Hak Akses</Label>
-                <Select value={userForm.role} onValueChange={(value) => setUserForm({ ...userForm, role: value as "admin" | "staff" })}>
+                <Select value={userForm.role} onValueChange={(value) => setUserForm({ ...userForm, role: value as UserData["role"] })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Admin (Akses Penuh)</SelectItem>
                     <SelectItem value="staff">Staff (Terbatas)</SelectItem>
+                    <SelectItem value="pending">Belum Disetujui / Nonaktif</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

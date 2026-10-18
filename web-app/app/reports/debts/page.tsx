@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Search, Wallet, AlertTriangle, CheckCircle, Clock, CreditCard, History, RefreshCw, DollarSign } from "lucide-react"
 import { db } from "@/lib/firebase"
-import { collection, onSnapshot, doc, writeBatch, serverTimestamp, query, where, orderBy, Timestamp, arrayUnion, increment } from "firebase/firestore"
+import { collection, onSnapshot, doc, runTransaction, serverTimestamp, query, where, orderBy, Timestamp, arrayUnion, increment } from "firebase/firestore"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
 
@@ -112,43 +112,51 @@ export default function DebtsPage() {
         if (!selectedDebt || !paymentAmount) return
 
         const amount = Number(paymentAmount)
-        if (amount <= 0 || amount > selectedDebt.remainingAmount) {
+        if (!Number.isFinite(amount) || amount <= 0 || amount > selectedDebt.remainingAmount) {
             toast({ title: "Jumlah tidak valid", description: "Tidak boleh melebihi sisa hutang.", variant: "destructive" })
             return
         }
 
         setIsSaving(true)
         try {
-            const batch = writeBatch(db)
             const debtRef = doc(db, "debts", selectedDebt.id)
+            const customerRef = selectedDebt.customerId && selectedDebt.customerId !== 'umum'
+                ? doc(db, "customers", selectedDebt.customerId)
+                : null
 
-            const newRemaining = selectedDebt.remainingAmount - amount
-            const newStatus = newRemaining === 0 ? 'paid' : 'partial'
+            // Read the current debt inside a transaction: a payment or return
+            // recorded on a phone at the same moment must not be overwritten.
+            const newStatus = await runTransaction(db, async (tx) => {
+                const debtSnap = await tx.get(debtRef)
+                const customerSnap = customerRef ? await tx.get(customerRef) : null
+                if (!debtSnap.exists()) throw new Error("Data hutang tidak ditemukan.")
 
-            const paymentLog = {
-                date: Timestamp.now(),
-                amount: amount,
-                note: paymentNote || `Pembayaran oleh ${user?.name || 'Admin'}`
-            }
+                const remaining = Number(debtSnap.data().remainingAmount) || 0
+                if (amount > remaining) {
+                    throw new Error(`Sisa hutang sekarang Rp ${remaining.toLocaleString('id-ID')}. Muat ulang lalu coba lagi.`)
+                }
+                const newRemaining = remaining - amount
+                const status = newRemaining === 0 ? 'paid' : 'partial'
 
-            // Update debt
-            batch.update(debtRef, {
-                remainingAmount: newRemaining,
-                status: newStatus,
-                logs: arrayUnion(paymentLog),
-                updatedAt: serverTimestamp()
-            })
-
-            // Update customer totalDebt
-            if (selectedDebt.customerId && selectedDebt.customerId !== 'umum') {
-                const customerRef = doc(db, "customers", selectedDebt.customerId)
-                batch.update(customerRef, {
-                    totalDebt: increment(-amount),
+                tx.update(debtRef, {
+                    remainingAmount: newRemaining,
+                    status,
+                    logs: arrayUnion({
+                        date: Timestamp.now(),
+                        amount: amount,
+                        note: paymentNote || `Pembayaran oleh ${user?.name || 'Admin'}`
+                    }),
                     updatedAt: serverTimestamp()
                 })
-            }
 
-            await batch.commit()
+                if (customerRef && customerSnap?.exists()) {
+                    tx.update(customerRef, {
+                        totalDebt: increment(-amount),
+                        updatedAt: serverTimestamp()
+                    })
+                }
+                return status
+            })
 
             toast({
                 title: newStatus === 'paid' ? "Hutang Lunas!" : "Pembayaran Dicatat",
@@ -157,7 +165,8 @@ export default function DebtsPage() {
             setIsPaymentOpen(false)
         } catch (error) {
             console.error(error)
-            toast({ title: "Gagal menyimpan", variant: "destructive" })
+            const message = error instanceof Error ? error.message : undefined
+            toast({ title: "Gagal menyimpan", description: message, variant: "destructive" })
         } finally {
             setIsSaving(false)
         }

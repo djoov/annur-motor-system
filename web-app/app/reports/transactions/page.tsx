@@ -14,14 +14,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { collection, onSnapshot, orderBy, query, Timestamp } from "firebase/firestore"
+import { collection, onSnapshot, orderBy, query, where, Timestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { endOfLocalDay, localDateKey, paymentLabel, startOfLocalDay } from "@/lib/shop-data"
 import { Search, Eye, Calendar, FileText, ShoppingBag, User, CreditCard } from "lucide-react"
 
+// Item fields as written by the mobile app (older docs may only have some).
 interface TransactionItem {
-  id: string
-  name: string
-  price: number
+  id?: string
+  itemId?: string
+  name?: string
+  itemName?: string
+  sellPrice?: number
   quantity: number
 }
 
@@ -31,8 +35,22 @@ interface Transaction {
   totalAmount: number
   totalProfit: number
   customerName: string
-  paymentMethod?: string // cash / transfer
+  paymentMethod?: string
+  type?: string
+  has_return?: boolean
   items: TransactionItem[]
+}
+
+const rupiah = (value: number) => {
+  const amount = value || 0
+  return `${amount < 0 ? "−" : ""}Rp ${Math.abs(amount).toLocaleString("id-ID")}`
+}
+
+const badgeClass: Record<string, string> = {
+  Hutang: "bg-amber-100 text-amber-800 hover:bg-amber-100",
+  Retur: "bg-red-100 text-red-700 hover:bg-red-100",
+  Transfer: "bg-blue-100 text-blue-700 hover:bg-blue-100",
+  Tunai: "bg-slate-100 text-slate-600 hover:bg-slate-100",
 }
 
 export default function TransactionsPage() {
@@ -41,18 +59,24 @@ export default function TransactionsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
 
-  // Date Filters
+  // Date Filters (local dates, default last 7 days)
   const [startDate, setStartDate] = useState(() => {
     const date = new Date();
-    date.setDate(date.getDate() - 7); // Default last 7 days
-    return date.toISOString().split('T')[0];
+    date.setDate(date.getDate() - 6);
+    return localDateKey(date);
   })
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [endDate, setEndDate] = useState(() => localDateKey(new Date()))
 
+  // Only the chosen date range is read, so the page stays cheap as history grows.
   useEffect(() => {
+    if (!startDate || !endDate) return;
     setIsLoading(true);
-    // Listen to real-time updates
-    const q = query(collection(db, "transactions"), orderBy("transactionDate", "desc"));
+    const q = query(
+      collection(db, "transactions"),
+      where("transactionDate", ">=", Timestamp.fromDate(startOfLocalDay(startDate))),
+      where("transactionDate", "<=", Timestamp.fromDate(endOfLocalDay(endDate))),
+      orderBy("transactionDate", "desc")
+    );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
@@ -67,27 +91,16 @@ export default function TransactionsPage() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [startDate, endDate]);
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
-      // 1. Date Filter
-      const tDate = t.transactionDate?.toDate ? t.transactionDate.toDate() : new Date();
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-
-      const isDateMatch = tDate >= start && tDate <= end;
-
-      // 2. Search Filter (ID or Customer Name)
-      const searchLower = searchTerm.toLowerCase();
-      const isSearchMatch =
-        t.customerName.toLowerCase().includes(searchLower) ||
-        t.id.toLowerCase().includes(searchLower);
-
-      return isDateMatch && isSearchMatch;
-    });
-  }, [transactions, startDate, endDate, searchTerm]);
+    const searchLower = searchTerm.toLowerCase();
+    if (!searchLower) return transactions;
+    return transactions.filter(t =>
+      (t.customerName || "").toLowerCase().includes(searchLower) ||
+      t.id.toLowerCase().includes(searchLower)
+    );
+  }, [transactions, searchTerm]);
 
   return (
     <MainLayout>
@@ -96,7 +109,7 @@ export default function TransactionsPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-slate-800">Riwayat Transaksi</h1>
-            <p className="text-slate-500 mt-1">Daftar lengkap transaksi penjualan dengan detail item.</p>
+            <p className="text-slate-500 mt-1">Daftar lengkap transaksi penjualan dan retur dengan detail item.</p>
           </div>
         </div>
 
@@ -164,41 +177,51 @@ export default function TransactionsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredTransactions.map((trx) => (
-                      <TableRow key={trx.id} className="hover:bg-slate-50/50">
-                        <TableCell className="font-medium text-slate-700">
-                          {trx.transactionDate?.toDate ? trx.transactionDate.toDate().toLocaleString("id-ID", {
-                            day: '2-digit', month: 'short', year: 'numeric',
-                            hour: '2-digit', minute: '2-digit'
-                          }) : "-"}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-slate-500">{trx.id.substring(0, 8)}...</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User className="w-3 h-3 text-slate-400" />
-                            <span className="font-medium text-slate-700">{trx.customerName || "Umum"}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="secondary" className="font-normal text-xs bg-slate-100 text-slate-600 hover:bg-slate-200">
-                            {trx.paymentMethod === 'transfer' ? 'Transfer' : 'Tunai'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-bold text-indigo-600">
-                          Rp {trx.totalAmount.toLocaleString("id-ID")}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            onClick={() => setSelectedTransaction(trx)}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    filteredTransactions.map((trx) => {
+                      const label = paymentLabel(trx);
+                      return (
+                        <TableRow key={trx.id} className="hover:bg-slate-50/50">
+                          <TableCell className="font-medium text-slate-700">
+                            {trx.transactionDate?.toDate ? trx.transactionDate.toDate().toLocaleString("id-ID", {
+                              day: '2-digit', month: 'short', year: 'numeric',
+                              hour: '2-digit', minute: '2-digit'
+                            }) : "-"}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-slate-500">{trx.id.substring(0, 8)}...</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <User className="w-3 h-3 text-slate-400" />
+                              <span className="font-medium text-slate-700">{trx.customerName || "Umum"}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <Badge variant="secondary" className={`font-normal text-xs ${badgeClass[label]}`}>
+                                {label}
+                              </Badge>
+                              {trx.has_return && (
+                                <Badge variant="outline" className="font-normal text-xs text-red-600 border-red-200">
+                                  Ada retur
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className={`text-right font-bold ${(trx.totalAmount || 0) < 0 ? "text-red-600" : "text-indigo-600"}`}>
+                            {rupiah(trx.totalAmount)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              onClick={() => setSelectedTransaction(trx)}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -226,14 +249,14 @@ export default function TransactionsPage() {
                   <div>
                     <p className="text-xs text-slate-400">Waktu</p>
                     <p className="font-medium text-slate-700">
-                      {selectedTransaction.transactionDate?.toDate().toLocaleString("id-ID")}
+                      {selectedTransaction.transactionDate?.toDate?.().toLocaleString("id-ID") ?? "-"}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">Pembayaran</p>
-                    <div className="flex items-center gap-1 font-medium text-slate-700 capitalize">
+                    <div className="flex items-center gap-1 font-medium text-slate-700">
                       <CreditCard className="w-3 h-3" />
-                      {selectedTransaction.paymentMethod || "Tunai"}
+                      {paymentLabel(selectedTransaction)}
                     </div>
                   </div>
                   <div>
@@ -244,29 +267,35 @@ export default function TransactionsPage() {
 
                 {/* Items List */}
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-800 mb-2">Item Dibeli</h4>
+                  <h4 className="text-sm font-semibold text-slate-800 mb-2">
+                    {selectedTransaction.type === "return" ? "Item Diretur" : "Item Dibeli"}
+                  </h4>
                   <div className="border rounded-lg divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
-                    {selectedTransaction.items.map((item, idx) => (
-                      <div key={idx} className="p-3 flex justify-between items-center text-sm">
-                        <div>
-                          <p className="font-medium text-slate-700 line-clamp-1">{item.name}</p>
-                          <p className="text-xs text-slate-500">
-                            {item.quantity} x Rp {item.price.toLocaleString("id-ID")}
+                    {(selectedTransaction.items || []).map((item, idx) => {
+                      const price = item.sellPrice || 0;
+                      const qty = item.quantity || 0;
+                      return (
+                        <div key={idx} className="p-3 flex justify-between items-center text-sm">
+                          <div>
+                            <p className="font-medium text-slate-700 line-clamp-1">{item.itemName || item.name || "-"}</p>
+                            <p className="text-xs text-slate-500">
+                              {Math.abs(qty)} x Rp {price.toLocaleString("id-ID")}
+                            </p>
+                          </div>
+                          <p className="font-semibold text-slate-800">
+                            {rupiah(price * qty)}
                           </p>
                         </div>
-                        <p className="font-semibold text-slate-800">
-                          Rp {(item.price * item.quantity).toLocaleString("id-ID")}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* Grand Total */}
                 <div className="flex justify-between items-center pt-4 border-t border-slate-200">
                   <span className="text-base font-bold text-slate-600">Total Transaksi</span>
-                  <span className="text-xl font-black text-indigo-600">
-                    Rp {selectedTransaction.totalAmount.toLocaleString("id-ID")}
+                  <span className={`text-xl font-black ${(selectedTransaction.totalAmount || 0) < 0 ? "text-red-600" : "text-indigo-600"}`}>
+                    {rupiah(selectedTransaction.totalAmount)}
                   </span>
                 </div>
               </div>

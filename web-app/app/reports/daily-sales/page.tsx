@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Calendar, Download, FileSpreadsheet, Search } from "lucide-react"
 import { db } from "@/lib/firebase"
-import { collection, getDocs, query, orderBy, Timestamp } from "firebase/firestore"
+import { collection, getDocs, query, orderBy, where, Timestamp } from "firebase/firestore"
+import { endOfLocalDay, localDateKey, startOfLocalDay, toDate } from "@/lib/shop-data"
 
 // Load chart dynamically to avoid SSR issues
 const DailySalesChart = dynamic(
@@ -36,26 +37,35 @@ export default function DailySalesPage() {
   const [startDate, setStartDate] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() - 29);
-    return date.toISOString().split('T')[0];
+    return localDateKey(date);
   });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(() => localDateKey(new Date()));
 
+  // Only the chosen date range is read, so the report stays cheap as history grows.
   useEffect(() => {
+    if (!startDate || !endDate) return;
     const fetchSalesData = async () => {
       setIsLoading(true);
       try {
-        const transactionsQuery = query(collection(db, "transactions"), orderBy("transactionDate", "asc"));
+        const transactionsQuery = query(
+          collection(db, "transactions"),
+          where("transactionDate", ">=", Timestamp.fromDate(startOfLocalDay(startDate))),
+          where("transactionDate", "<=", Timestamp.fromDate(endOfLocalDay(endDate))),
+          orderBy("transactionDate", "asc")
+        );
         const querySnapshot = await getDocs(transactionsQuery);
         const dailyData: { [key: string]: DailySales } = {};
 
         querySnapshot.forEach(doc => {
           const trx = doc.data();
-          if (trx.transactionDate) {
-            const date = (trx.transactionDate as Timestamp).toDate().toISOString().split('T')[0];
+          const trxDate = toDate(trx.transactionDate);
+          if (trxDate) {
+            const date = localDateKey(trxDate);
             if (!dailyData[date]) {
               dailyData[date] = { date, transactions: 0, revenue: 0, profit: 0, items_sold: 0 };
             }
-            dailyData[date].transactions += 1;
+            // Returns carry negative amounts/quantities; count only sales as transactions.
+            if (trx.type !== "return") dailyData[date].transactions += 1;
             dailyData[date].revenue += trx.totalAmount || 0;
             dailyData[date].profit += trx.totalProfit || 0;
             dailyData[date].items_sold += (trx.items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
@@ -72,15 +82,9 @@ export default function DailySalesPage() {
       }
     };
     fetchSalesData();
-  }, []);
+  }, [startDate, endDate]);
 
-  const filteredData = useMemo(() => allSalesData.filter((item) => {
-    const itemDate = new Date(item.date)
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-    end.setHours(23, 59, 59, 999);
-    return itemDate >= start && itemDate <= end
-  }), [allSalesData, startDate, endDate]);
+  const filteredData = allSalesData;
 
   const exportData = () => {
     const csvContent = [
@@ -104,8 +108,8 @@ export default function DailySalesPage() {
     const end = new Date();
     const start = new Date();
     start.setDate(end.getDate() - days + 1);
-    setEndDate(end.toISOString().split('T')[0]);
-    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(localDateKey(end));
+    setStartDate(localDateKey(start));
   }
 
   return (

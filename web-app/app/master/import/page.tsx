@@ -29,7 +29,7 @@ const dataTypesConfig = {
     label: "Data Barang",
     collection: "items",
     // Match Mobile App Headers EXACTLY
-    headers: ["KODE", "NAMA BARANG", "HARGA BELI", "HARGA JUAL (UMUM)", "STOK TOKO", "STOK GUDANG", "KATEGORI"] as const,
+    headers: ["KODE", "NAMA BARANG", "HARGA BELI", "HARGA JUAL (UMUM)", "STOK TOKO", "KATEGORI"] as const,
     sample: [
       {
         "KODE": "OLI-SAMPLE",
@@ -37,7 +37,6 @@ const dataTypesConfig = {
         "HARGA BELI": 50000,
         "HARGA JUAL (UMUM)": 65000,
         "STOK TOKO": 100,
-        "STOK GUDANG": 50,
         "KATEGORI": "Oli & Pelumas"
       },
     ],
@@ -104,7 +103,6 @@ export default function ImportPage() {
           row["HARGA BELI"] = data.buyPrice;
           row["HARGA JUAL (UMUM)"] = data.sellPrice;
           row["STOK TOKO"] = data.stock;
-          row["STOK GUDANG"] = data.qty_warehouse || 0;
           row["KATEGORI"] = data.category;
         } else {
           config.headers.forEach(header => {
@@ -164,7 +162,15 @@ export default function ImportPage() {
     setUploadProgress(0);
 
     const collectionRef = collection(db, importType);
-    const batch = writeBatch(db);
+    // Firestore allows at most 500 writes per batch; commit every 400 rows.
+    let batch = writeBatch(db);
+    let pending = 0;
+    const flush = async () => {
+      if (pending === 0) return;
+      await batch.commit();
+      batch = writeBatch(db);
+      pending = 0;
+    };
     let added = 0, updated = 0;
     const errors: string[] = [];
 
@@ -184,7 +190,6 @@ export default function ImportPage() {
           const rawBuy = getVal(['buyPrice', 'HARGA BELI', 'Harga Beli', 'harga_beli']);
           const rawSell = getVal(['sellPrice', 'HARGA JUAL (UMUM)', 'HARGA JUAL', 'Harga Jual', 'harga_jual']);
           const rawStock = getVal(['stock', 'qt_display', 'STOK TOKO', 'STOCK DISPLAY', 'Stok Toko', 'jumlah']);
-          const rawQtyWarehouse = getVal(['qty_warehouse', 'STOK GUDANG', 'Stok Gudang']);
           const rawMinStock = getVal(['minStock', 'min_stock', 'stok_min']);
           const rawCategory = getVal(['category', 'KATEGORI', 'Category', 'brand']);
 
@@ -196,7 +201,7 @@ export default function ImportPage() {
             buyPrice: Number(rawBuy) || 0,
             sellPrice: Number(rawSell) || 0,
             stock: Number(rawStock) || 0,
-            qty_warehouse: Number(rawQtyWarehouse) || 0,
+            qty_display: Number(rawStock) || 0, // mirror of stock (mobile)
             minStock: Number(rawMinStock) || 5,
           };
 
@@ -221,14 +226,17 @@ export default function ImportPage() {
         if (snapshot.empty) {
           const newDocRef = doc(collectionRef);
           batch.set(newDocRef, { ...processedRow, createdAt: serverTimestamp() });
+          pending++;
           added++;
         } else {
           const existingDocRef = snapshot.docs[0].ref;
           // Merge logic: only update fields present in CSV? 
           // Current requirement: "Sync" usually means overwrite/update.
           batch.update(existingDocRef, processedRow);
+          pending++;
           updated++;
         }
+        if (pending >= 400) await flush();
       } catch (e: any) {
         errors.push(`Baris ${index + 2}: ${e.message}`);
       }
@@ -236,7 +244,7 @@ export default function ImportPage() {
     }
 
     try {
-      await batch.commit();
+      await flush();
       setImportResult({ added, updated, failed: errors.length, errors });
       toast({ title: "Import Selesai", description: `Ditambah: ${added}, Diperbarui: ${updated}, Gagal: ${errors.length}.` });
       setSelectedFile(null);

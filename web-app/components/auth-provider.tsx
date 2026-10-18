@@ -22,7 +22,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 interface User {
   id: string
   email: string | null
-  role: "admin" | "staff"
+  role: "admin" | "staff" | "pending"
   name: string
 }
 
@@ -48,31 +48,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        const userDocRef = doc(db, "users", firebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
+        try {
+          const userDocRef = doc(db, "users", firebaseUser.uid);
+          const userDoc = await getDoc(userDocRef);
 
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setUser({
+              id: firebaseUser.uid,
+              email: firebaseUser.email,
+              name: userData.name || firebaseUser.displayName || "Pengguna Baru",
+              // Same as mobile: an account without a role is not approved yet.
+              role: userData.role === "admin" || userData.role === "staff" ? userData.role : "pending"
+            });
+          } else {
+            // New accounts wait for admin approval (see firestore.rules)
+            const newUserData = {
+              name: firebaseUser.displayName || "Pengguna Baru",
+              email: firebaseUser.email,
+              role: "pending",
+              createdAt: serverTimestamp()
+            };
+            await setDoc(userDocRef, newUserData);
+            setUser({
+              id: firebaseUser.uid,
+              email: firebaseUser.email,
+              name: newUserData.name,
+              role: "pending"
+            });
+          }
+        } catch (error) {
+          // Without a readable profile, treat the account as not approved.
+          console.error("Gagal memuat profil pengguna:", error);
           setUser({
             id: firebaseUser.uid,
             email: firebaseUser.email,
-            name: userData.name || firebaseUser.displayName || "Pengguna Baru",
-            role: userData.role || "staff"
-          });
-        } else {
-          // New accounts wait for admin approval (see firestore.rules)
-          const newUserData = {
-            name: firebaseUser.displayName || "Pengguna Baru",
-            email: firebaseUser.email,
-            role: "pending",
-            createdAt: serverTimestamp()
-          };
-          await setDoc(userDocRef, newUserData);
-          setUser({
-            id: firebaseUser.uid,
-            email: firebaseUser.email,
-            name: newUserData.name,
-            role: newUserData.role as "admin" | "staff"
+            name: firebaseUser.displayName || "Pengguna",
+            role: "pending"
           });
         }
       } else {

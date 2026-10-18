@@ -48,7 +48,7 @@ export function AIAssistant() {
         } catch (error: any) {
             setMessages(prev => [...prev, { 
                 role: "model", 
-                content: "[ERROR] TRANSMISI TERPUTUS: " + error.message + ". PASTIKAN KUNCI API (GEMINI_API_KEY) TELAH TERPASANG DI SISTEM." 
+                content: "[ERROR] " + error.message + "." 
             }]);
         } finally {
             setIsLoading(false);
@@ -123,6 +123,7 @@ export function AIAssistant() {
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                         placeholder="MASUKAN PERINTAH ATAU PERTANYAAN TENTANG OLI..."
+                        maxLength={500}
                         className="flex-1 bg-black text-white px-4 h-12 border-y border-zinc-800 focus:outline-none focus:border-orange-500 font-mono text-sm uppercase placeholder:text-zinc-700 transition-colors"
                         disabled={isLoading}
                     />

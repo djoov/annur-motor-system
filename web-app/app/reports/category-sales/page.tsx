@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts"
-import { collection, getDocs } from "firebase/firestore"
+import { collection, getDocs, query, where, Timestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { BarChart3 } from "lucide-react"
 
@@ -20,33 +20,44 @@ export default function CategorySalesPage() {
   useEffect(() => {
     const fetchCategorySales = async () => {
       setIsLoading(true);
-      const transactionsSnapshot = await getDocs(collection(db, "transactions"));
+      try {
+        // Last 90 days only: reading the whole history on every visit gets slow and costly.
+        const since = new Date();
+        since.setHours(0, 0, 0, 0);
+        since.setDate(since.getDate() - 89);
+        const transactionsSnapshot = await getDocs(
+          query(collection(db, "transactions"), where("transactionDate", ">=", Timestamp.fromDate(since)))
+        );
       
-      const categorySales: { [key: string]: number } = {};
+        const categorySales: { [key: string]: number } = {};
 
-      transactionsSnapshot.forEach(doc => {
-        const transaction = doc.data();
-        if (transaction.items && Array.isArray(transaction.items)) {
-          transaction.items.forEach(item => {
-            const category = item.category || "Tanpa Kategori";
-            const saleAmount = item.quantity * item.sellPrice;
+        transactionsSnapshot.forEach(doc => {
+          const transaction = doc.data();
+          if (transaction.items && Array.isArray(transaction.items)) {
+            transaction.items.forEach((item: any) => {
+              const category = item.category || "Tanpa Kategori";
+              const saleAmount = (Number(item.quantity) || 0) * (Number(item.sellPrice) || 0);
             
-            if (categorySales[category]) {
-              categorySales[category] += saleAmount;
-            } else {
-              categorySales[category] = saleAmount;
-            }
-          });
-        }
-      });
+              if (categorySales[category]) {
+                categorySales[category] += saleAmount;
+              } else {
+                categorySales[category] = saleAmount;
+              }
+            });
+          }
+        });
 
-      const formattedData = Object.keys(categorySales).map(category => ({
-        category: category,
-        totalSales: categorySales[category]
-      })).sort((a, b) => b.totalSales - a.totalSales); // Urutkan dari penjualan tertinggi
+        const formattedData = Object.keys(categorySales).map(category => ({
+          category: category,
+          totalSales: categorySales[category]
+        })).sort((a, b) => b.totalSales - a.totalSales); // Urutkan dari penjualan tertinggi
 
-      setSalesData(formattedData);
-      setIsLoading(false);
+        setSalesData(formattedData);
+      } catch (error) {
+        console.error("Gagal memuat penjualan per kategori:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     fetchCategorySales();
@@ -66,7 +77,7 @@ export default function CategorySalesPage() {
               <BarChart3 />
               Grafik Penjualan per Kategori
             </CardTitle>
-            <CardDescription>Visualisasi total penjualan untuk setiap kategori.</CardDescription>
+            <CardDescription>Total penjualan tiap kategori dalam 90 hari terakhir (dikurangi retur).</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (

@@ -19,7 +19,6 @@ const navigation = [
     section: "Menu Utama",
     items: [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { name: "Kasir (POS)", href: "/pos", icon: ShoppingCart },
     ]
   },
   {
@@ -35,7 +34,7 @@ const navigation = [
           { name: "Stok Opname", href: "/master/stock", icon: Archive },
           { name: "Pelanggan", href: "/master/customers", icon: Users },
           { name: "Supplier", href: "/master/suppliers", icon: Truck },
-          { name: "Pembelian", href: "/master/purchases", icon: ShoppingCart }, // Reused ShoppingCart or a better one
+          { name: "Pembelian", href: "/master/purchases", icon: ShoppingCart },
           { name: "Import Data", href: "/master/import", icon: Upload },
         ],
       },
@@ -204,7 +203,7 @@ export function Sidebar() {
               <p className="text-sm font-bold text-slate-800 truncate">{user?.name || "Administrator"}</p>
               <p className="text-[10px] text-slate-500 capitalize flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-                {user?.role || "Super Admin"}
+                Admin
               </p>
             </div>
           </div>

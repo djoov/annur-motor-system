@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Calendar, FileSpreadsheet } from "lucide-react"
-import { collection, getDocs, query, orderBy, Timestamp } from "firebase/firestore"
+import { collection, getDocs, query, orderBy, where, Timestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { endOfLocalDay, localDateKey, startOfLocalDay, toDate } from "@/lib/shop-data"
 
 const ProfitChart = dynamic(
   () => import('@/components/layout/ProfitChart').then(mod => mod.ProfitChart),
@@ -33,23 +34,31 @@ export default function ProfitReportPage() {
   const [startDate, setStartDate] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() - 29);
-    return date.toISOString().split('T')[0];
+    return localDateKey(date);
   });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(() => localDateKey(new Date()));
 
+  // Only the chosen date range is read, so the report stays cheap as history grows.
   useEffect(() => {
+    if (!startDate || !endDate) return;
     const fetchProfitData = async () => {
       setIsLoading(true);
       try {
-        const q = query(collection(db, "transactions"), orderBy("transactionDate", "asc"));
+        const q = query(
+          collection(db, "transactions"),
+          where("transactionDate", ">=", Timestamp.fromDate(startOfLocalDay(startDate))),
+          where("transactionDate", "<=", Timestamp.fromDate(endOfLocalDay(endDate))),
+          orderBy("transactionDate", "asc")
+        );
         const querySnapshot = await getDocs(q);
 
         const dailyData: { [key: string]: { profit: number, revenue: number } } = {};
 
         querySnapshot.forEach(doc => {
           const transaction = doc.data();
-          if (transaction.transactionDate) {
-            const date = (transaction.transactionDate as Timestamp).toDate().toISOString().split('T')[0];
+          const trxDate = toDate(transaction.transactionDate);
+          if (trxDate) {
+            const date = localDateKey(trxDate);
 
             if (!dailyData[date]) {
               dailyData[date] = { profit: 0, revenue: 0 };
@@ -75,19 +84,17 @@ export default function ProfitReportPage() {
     };
 
     fetchProfitData();
-  }, []);
+  }, [startDate, endDate]);
 
-  const filteredData = useMemo(() => profitData.filter(item => {
-    return item.date >= startDate && item.date <= endDate;
-  }), [profitData, startDate, endDate]);
+  const filteredData = profitData;
 
   // Helper for quick date selection
   const setRange = (days: number) => {
     const end = new Date();
     const start = new Date();
     start.setDate(end.getDate() - days + 1);
-    setEndDate(end.toISOString().split('T')[0]);
-    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(localDateKey(end));
+    setStartDate(localDateKey(start));
   }
 
   const exportData = () => {
