@@ -673,6 +673,7 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
               imageUrl,
               location,
               description,
+              originalStock: widget.item!.stockDisplay,
             )
           : await provider.addItem(
               name,

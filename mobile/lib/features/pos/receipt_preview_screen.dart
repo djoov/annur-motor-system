@@ -14,7 +14,6 @@ import '../../core/theme.dart';
 import '../../ui/button.dart';
 import '../settings/settings_provider.dart';
 import 'pos_provider.dart';
-import '../debts/debt_provider.dart';
 import 'widgets/pos_widgets.dart' show posRupiah;
 
 class ReceiptPreviewScreen extends StatefulWidget {
@@ -383,26 +382,7 @@ class _ReceiptPreviewScreenState extends State<ReceiptPreviewScreen> {
       return;
     }
 
-    // 2. Handle Debt (If applicable)
-    // We check the draft data's payment method
-    final paymentMethod = widget.transactionData['paymentMethod'];
-    if (paymentMethod == 'debt' && mounted) {
-      try {
-        await Provider.of<DebtProvider>(context, listen: false).createDebt(
-          customerId: widget.transactionData['customerId'],
-          customerName: widget.transactionData['customerName'],
-          transactionId: widget.transactionData['id'],
-          amount: widget.transactionData['totalAmount'],
-        );
-      } catch (e) {
-        // Just show error, transaction itself is already saved
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text("Hutang Gagal Dicatat: $e")));
-        }
-      }
-    }
+    // 2. A debt sale's debt is recorded inside finalizeTransaction.
 
     // 3. Print (If requested)
     if (print && mounted) {

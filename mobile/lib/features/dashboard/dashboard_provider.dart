@@ -198,7 +198,9 @@ class DashboardProvider extends ChangeNotifier {
       _customerCount = snapshot.docs.length;
       int totalDebt = 0;
       for (var doc in snapshot.docs) {
-        final debt = (doc.data()['debt'] as num?)?.toInt() ?? 0;
+        // Both apps maintain `totalDebt`; `debt` is the old field name.
+        final data = doc.data();
+        final debt = ((data['totalDebt'] ?? data['debt']) as num?)?.toInt() ?? 0;
         totalDebt += debt;
       }
       _totalUnpaidDebt = totalDebt;

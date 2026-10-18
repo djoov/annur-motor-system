@@ -144,7 +144,7 @@ class Customer {
       name: data['name']?.toString() ?? '',
       phone: data['phone']?.toString() ?? '',
       address: data['address']?.toString() ?? '',
-      debt: parseInt(data['debt']),
+      debt: parseInt(data['totalDebt'] ?? data['debt']),
     );
   }
 }

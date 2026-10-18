@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../returns/return_provider.dart';
+
 class TransactionItem {
   final String itemId;
   final String itemName;
@@ -73,16 +75,8 @@ class TransactionModel {
           .toList();
     }
 
-    // Parse returnedItems
-    Map<String, int> returnedItemsMap = {};
-    if (data['returned_items'] != null) {
-      final mapData = data['returned_items'] as Map<String, dynamic>;
-      mapData.forEach((key, value) {
-        if (value is int) {
-          returnedItemsMap[key] = value;
-        }
-      });
-    }
+    // Includes returns saved by older versions under literal dotted keys.
+    final returnedItemsMap = ReturnProvider.returnedItemsOf(data);
 
     return TransactionModel(
       id: doc.id,

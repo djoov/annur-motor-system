@@ -10,6 +10,10 @@ class ItemsProvider extends ChangeNotifier {
 
   List<Item> _items = [];
   bool _isLoading = false;
+
+  /// Items already announced as low, so every stock change (each sale)
+  /// doesn't re-fire the "stok menipis" notification. null = not loaded yet.
+  Set<String>? _announcedLowIds;
   StreamSubscription<QuerySnapshot>? _itemsSubscription;
 
   ItemsProvider() {
@@ -85,29 +89,34 @@ class ItemsProvider extends ChangeNotifier {
 
   void _checkLowStock() {
     final lowStockItems = _items.where((i) => i.stockDisplay <= 5).toList();
-    if (lowStockItems.isNotEmpty) {
-      // Build detailed message
-      String body = "";
-      if (lowStockItems.length == 1) {
-        body =
-            "Stok ${lowStockItems.first.name} menipis (Sisa: ${lowStockItems.first.stockDisplay})";
-      } else {
-        final names = lowStockItems.take(3).map((e) => e.name).join(", ");
-        final diff = lowStockItems.length - 3;
-        if (diff > 0) {
-          body = "Stok menipis: $names, dan $diff lainnya.";
-        } else {
-          body = "Stok menipis: $names.";
-        }
-      }
+    final lowIds = lowStockItems.map((i) => i.id).toSet();
 
-      // Notification
-      NotificationService().showNotification(
-        id: 1,
-        title: "Peringatan Stok Menipis",
-        body: body,
-      );
+    // First load: one summary. Afterwards: only items that newly ran low.
+    final isFirstLoad = _announcedLowIds == null;
+    final newlyLow = isFirstLoad
+        ? lowStockItems
+        : lowStockItems.where((i) => !_announcedLowIds!.contains(i.id)).toList();
+    // Restocked items leave the set, so they are announced again next time.
+    _announcedLowIds = lowIds;
+    if (newlyLow.isEmpty) return;
+
+    final String body;
+    if (newlyLow.length == 1) {
+      body =
+          "Stok ${newlyLow.first.name} menipis (Sisa: ${newlyLow.first.stockDisplay})";
+    } else {
+      final names = newlyLow.take(3).map((e) => e.name).join(", ");
+      final diff = newlyLow.length - 3;
+      body = diff > 0
+          ? "Stok menipis: $names, dan $diff lainnya."
+          : "Stok menipis: $names.";
     }
+
+    NotificationService().showNotification(
+      id: 1,
+      title: "Peringatan Stok Menipis",
+      body: body,
+    );
   }
 
   /// Turns a save failure into a message the cashier can act on, instead of a
@@ -195,8 +204,9 @@ class ItemsProvider extends ChangeNotifier {
     String category,
     String? imageUrl,
     String? locationDisplay,
-    String? description,
-  ) async {
+    String? description, {
+    int? originalStock,
+  }) async {
     try {
       _isLoading = true;
       notifyListeners();
@@ -232,8 +242,13 @@ class ItemsProvider extends ChangeNotifier {
         'code': normalizedCode,
         'sellPrice': sellPrice,
         'buyPrice': buyPrice,
-        'stock': stockDisplay,
-        'qty_display': stockDisplay,
+        // Only write stock when the user changed it in the form. Otherwise
+        // editing a price would reset stock to the value shown when the form
+        // opened, undoing any sale made in the meantime.
+        if (originalStock == null || stockDisplay != originalStock) ...{
+          'stock': stockDisplay,
+          'qty_display': stockDisplay,
+        },
         'tags': tags,
         'category': category,
         'imageUrl': imageUrl ?? '',
@@ -275,15 +290,24 @@ class ItemsProvider extends ChangeNotifier {
       final index = _items.indexWhere((i) => i.id == id);
       if (index == -1) return false;
 
-      final item = _items[index];
-      int currentStock = item.stockDisplay;
-      int newStock = currentStock + delta;
-      if (newStock < 0) newStock = 0;
-
-      await _db.collection('items').doc(id).update({
-        'stock': newStock,
-        'qty_display': newStock,
-        'updatedAt': FieldValue.serverTimestamp(),
+      // Read the current stock inside a transaction so a sale made a moment
+      // ago isn't overwritten by the (possibly stale) value on screen.
+      final ref = _db.collection('items').doc(id);
+      await _db.runTransaction((tx) async {
+        final snap = await tx.get(ref);
+        if (!snap.exists) throw Exception("Barang tidak ditemukan");
+        final data = snap.data()!;
+        final current =
+            ((data['stock'] ?? data['qty_display'] ?? data['qty_warehouse'])
+                        as num?)
+                    ?.toInt() ??
+                0;
+        final newStock = current + delta < 0 ? 0 : current + delta;
+        tx.update(ref, {
+          'stock': newStock,
+          'qty_display': newStock,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
       });
 
       await fetchItems();

@@ -34,6 +34,8 @@ class _ReturnSelectionScreenState extends State<ReturnSelectionScreen> {
   int _maxReturnable(TransactionItem item) =>
       item.quantity - (widget.transaction.returnedItems[item.itemId] ?? 0);
 
+  bool get _isDebtSale => widget.transaction.paymentMethod == 'debt';
+
   int get _refundTotal => widget.transaction.items.fold(
         0,
         (sum, i) => sum + (_returnQuantities[i.itemId] ?? 0) * i.sellPrice,
@@ -56,8 +58,9 @@ class _ReturnSelectionScreenState extends State<ReturnSelectionScreen> {
     final ok = await confirmDestructive(
       context,
       title: "Proses retur?",
-      message:
-          "$count barang dikembalikan ke stok dan uang ${_rupiah.format(_refundTotal)} dikembalikan ke pelanggan.",
+      message: _isDebtSale
+          ? "$count barang dikembalikan ke stok. ${_rupiah.format(_refundTotal)} mengurangi hutang ${widget.transaction.customerName}; uang tunai hanya dikembalikan bila hutangnya sudah lebih kecil."
+          : "$count barang dikembalikan ke stok dan uang ${_rupiah.format(_refundTotal)} dikembalikan ke pelanggan.",
       action: "Proses Retur",
     );
     if (!ok || !mounted) return;
@@ -65,24 +68,31 @@ class _ReturnSelectionScreenState extends State<ReturnSelectionScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     setState(() => _isSaving = true);
-    final success = await context.read<ReturnProvider>().processReturn(
-          originalTransactionId: widget.transaction.id,
-          itemsToReturn: items,
-          customerId: widget.transaction.customerId,
-          customerName: widget.transaction.customerName,
-        );
-    if (!mounted) return;
-    setState(() => _isSaving = false);
-
-    if (success) {
+    try {
+      final result = await context.read<ReturnProvider>().processReturn(
+            originalTransactionId: widget.transaction.id,
+            itemsToReturn: items,
+            customerId: widget.transaction.customerId,
+            customerName: widget.transaction.customerName,
+          );
+      if (!mounted) return;
+      final parts = [
+        if (result.debtReduced > 0)
+          "hutang berkurang ${_rupiah.format(result.debtReduced)}",
+        if (result.cashRefund > 0)
+          "kembalikan uang ${_rupiah.format(result.cashRefund)}",
+      ];
       messenger.showSnackBar(
-        SnackBar(
-          content: Text("Retur diproses. Kembalikan ${_rupiah.format(_refundTotal)}"),
-        ),
+        SnackBar(content: Text("Retur diproses: ${parts.join(', ')}")),
       );
       navigator.pop();
-    } else {
-      showErrorSnack(context, "Retur gagal diproses. Coba lagi.");
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      showErrorSnack(
+        context,
+        "Retur gagal: ${e.toString().replaceFirst('Exception: ', '')}",
+      );
     }
   }
 
@@ -148,9 +158,9 @@ class _ReturnSelectionScreenState extends State<ReturnSelectionScreen> {
           children: [
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
-                    "Uang dikembalikan",
+                    _isDebtSale ? "Mengurangi hutang" : "Uang dikembalikan",
                     style: TextStyle(fontSize: 14, color: AppColors.mutedForeground),
                   ),
                 ),

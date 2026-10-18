@@ -950,6 +950,18 @@ class SettingsProvider with ChangeNotifier {
         }
       }
 
+      // Debts are gone, so each customer's running total must be zeroed too
+      // (Beranda and the customer picker read it), as the web reset does.
+      final customers =
+          await FirebaseFirestore.instance.collection('customers').get();
+      for (var i = 0; i < customers.docs.length; i += 400) {
+        final batch = FirebaseFirestore.instance.batch();
+        for (final doc in customers.docs.skip(i).take(400)) {
+          batch.update(doc.reference, {'totalDebt': 0, 'debt': 0});
+        }
+        await batch.commit();
+      }
+
       // Note: We are NOT resetting Item Stock to 0 because that would require re-entry.
       // We only clear history as requested.
     } catch (e) {

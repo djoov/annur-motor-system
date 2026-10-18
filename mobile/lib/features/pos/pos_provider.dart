@@ -518,6 +518,14 @@ class PosProvider extends ChangeNotifier {
           .collection('transactions')
           .doc(transactionData['id']);
 
+      // A debt sale records the debt in the same atomic write as the sale.
+      // (Writing it afterwards could fail or be cut off, leaving an "unpaid"
+      // sale with no debt to collect.)
+      final isDebtSale = transactionData['paymentMethod'] == 'debt';
+      final customerId = transactionData['customerId'] as String;
+      final customerRef = _db.collection('customers').doc(customerId);
+      final debtRef = _db.collection('debts').doc();
+
       // Read + validate + write atomically: if another cashier sells the same
       // item at the same moment, Firestore retries this block with fresh stock,
       // so stock can never go below zero.
@@ -526,6 +534,13 @@ class PosProvider extends ChangeNotifier {
         final Map<String, DocumentSnapshot<Map<String, dynamic>>> snaps = {};
         for (final itemId in qtyById.keys) {
           snaps[itemId] = await tx.get(_db.collection('items').doc(itemId));
+        }
+        if (isDebtSale) {
+          if (customerId == 'umum' || !(await tx.get(customerRef)).exists) {
+            throw Exception(
+              "Pelanggan untuk hutang tidak ditemukan. Pilih pelanggan lagi.",
+            );
+          }
         }
 
         for (final entry in qtyById.entries) {
@@ -551,6 +566,27 @@ class PosProvider extends ChangeNotifier {
           'transactionDate': FieldValue.serverTimestamp(),
         });
 
+        if (isDebtSale) {
+          final amount = transactionData['totalAmount'] as int;
+          final now = Timestamp.now();
+          tx.set(debtRef, {
+            'customerId': customerId,
+            'customerName': transactionData['customerName'],
+            'transactionId': transactionRef.id,
+            'totalAmount': amount,
+            'remainingAmount': amount,
+            'status': 'unpaid',
+            'createdAt': now,
+            'updatedAt': now,
+            'dueDate': null,
+            'logs': [],
+          });
+          tx.update(customerRef, {
+            'totalDebt': FieldValue.increment(amount),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
         // Write absolute values (read in this transaction) so both stock
         // fields stay in sync, even for older items without `stock`.
         for (final entry in qtyById.entries) {
@@ -568,8 +604,13 @@ class PosProvider extends ChangeNotifier {
         }
       });
 
-      // Clear cart ONLY after success
+      // Clear cart ONLY after success, and start the next sale fresh: a
+      // leftover "Hutang" + customer would silently book the next (cash)
+      // buyer as debt for the previous customer.
       _cart.clear();
+      _isDebt = false;
+      _paymentType = 'cash';
+      _selectedCustomerId = 'umum';
       await fetchData(); // Refresh local data
 
       return true;
